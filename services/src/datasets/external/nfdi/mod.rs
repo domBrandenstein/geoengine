@@ -1,38 +1,42 @@
+use crate::api::model::datatypes::{DataId, DataProviderId, ExternalDataId, LayerId};
 use crate::datasets::external::nfdi::metadata::{DataType, GEMetadata, RasterInfo, VectorInfo};
-use crate::datasets::listing::{
-     ProvenanceOutput,
+use crate::datasets::listing::ProvenanceOutput;
+use crate::error::{self, Error, Result};
+use crate::layers::external::{DataProvider, DataProviderDefinition};
+use crate::layers::layer::{
+    CollectionItem, Layer, LayerCollection, LayerCollectionListOptions, LayerListing,
+    ProviderLayerCollectionId, ProviderLayerId,
 };
-use crate::error::{Error, Result, self};
-use crate::layers::external::{DataProviderDefinition, DataProvider};
-use crate::layers::layer::{LayerCollectionListOptions, CollectionItem, Layer, LayerListing, ProviderLayerId, LayerCollection, ProviderLayerCollectionId};
-use crate::layers::listing::{LayerCollectionProvider, LayerCollectionId};
+use crate::layers::listing::{LayerCollectionId, LayerCollectionProvider};
 use crate::util::operators::source_operator_from_dataset;
 use crate::util::user_input::Validated;
 use crate::workflows::workflow::Workflow;
+use aruna_rust_api::api::storage::models::v1::{CollectionOverview, Object};
+use aruna_rust_api::api::storage::services::v1::collection_service_client::CollectionServiceClient;
+use aruna_rust_api::api::storage::services::v1::object_group_service_client::ObjectGroupServiceClient;
+use aruna_rust_api::api::storage::services::v1::object_service_client::ObjectServiceClient;
+use aruna_rust_api::api::storage::services::v1::project_service_client::ProjectServiceClient;
+use aruna_rust_api::api::storage::services::v1::{
+    CreateDownloadLinksStreamRequest, GetCollectionByIdRequest, GetCollectionsRequest,
+    GetDownloadUrlRequest, GetObjectByIdRequest, GetObjectGroupObjectsRequest,
+    GetObjectGroupsRequest,
+};
 use geoengine_datatypes::collections::VectorDataType;
-use crate::api::model::datatypes::{DataId, ExternalDataId, DataProviderId, LayerId};
 use geoengine_datatypes::primitives::{
     FeatureDataType, Measurement, RasterQueryRectangle, VectorQueryRectangle,
 };
 use geoengine_datatypes::spatial_reference::SpatialReferenceOption;
 use geoengine_operators::engine::{
-    MetaData, MetaDataProvider, RasterResultDescriptor, ResultDescriptor, TypedResultDescriptor,
-    VectorResultDescriptor, VectorOperator, TypedOperator, RasterOperator,
-    VectorColumnInfo, OperatorName,
+    MetaData, MetaDataProvider, OperatorName, RasterOperator, RasterResultDescriptor,
+    ResultDescriptor, TypedOperator, TypedResultDescriptor, VectorColumnInfo, VectorOperator,
+    VectorResultDescriptor,
 };
 use geoengine_operators::mock::MockDatasetDataSourceLoadingInfo;
 use geoengine_operators::source::{
     FileNotFoundHandling, GdalDatasetParameters, GdalLoadingInfo, GdalLoadingInfoTemporalSlice,
-    GdalLoadingInfoTemporalSliceIterator, OgrSourceColumnSpec, OgrSourceDataset,
-    OgrSourceDatasetTimeType, OgrSourceDurationSpec, OgrSourceErrorSpec, OgrSourceTimeFormat, OgrSourceParameters, OgrSource, GdalSource, GdalSourceParameters,
-};
-use scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::models::v1::Object;
-use scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::services::v1::dataset_service_client::DatasetServiceClient;
-use scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::services::v1::object_load_service_client::ObjectLoadServiceClient;
-use scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::services::v1::project_service_client::ProjectServiceClient;
-use scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::services::v1::{
-    CreateDownloadLinkRequest, GetDatasetObjectGroupsRequest, GetDatasetRequest,
-    GetProjectDatasetsRequest,
+    GdalLoadingInfoTemporalSliceIterator, GdalSource, GdalSourceParameters, OgrSource,
+    OgrSourceColumnSpec, OgrSourceDataset, OgrSourceDatasetTimeType, OgrSourceDurationSpec,
+    OgrSourceErrorSpec, OgrSourceParameters, OgrSourceTimeFormat,
 };
 use serde::{Deserialize, Serialize};
 use snafu::ensure;
@@ -43,8 +47,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
-use tonic::service::Interceptor;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::{Request, Status};
 
 pub mod metadata;
@@ -53,7 +56,7 @@ const URL_REPLACEMENT: &str = "%URL%";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NFDIDataProviderDefinition {
+pub struct ArunaDataProviderDefinition {
     id: DataProviderId,
     name: String,
     api_url: String,
@@ -63,7 +66,7 @@ pub struct NFDIDataProviderDefinition {
 
 #[typetag::serde]
 #[async_trait::async_trait]
-impl DataProviderDefinition for NFDIDataProviderDefinition {
+impl DataProviderDefinition for ArunaDataProviderDefinition {
     async fn initialize(self: Box<Self>) -> Result<Box<dyn DataProvider>> {
         Ok(Box::new(NFDIDataProvider::new(self).await?))
     }
@@ -81,30 +84,21 @@ impl DataProviderDefinition for NFDIDataProviderDefinition {
     }
 }
 
-/// Intercepts `gRPC` calls to the core-storage and attaches the authorization token
-#[derive(Clone, Debug)]
-struct APITokenInterceptor {
-    key: AsciiMetadataKey,
-    token: AsciiMetadataValue,
+#[derive(Clone)]
+pub struct ClientInterceptor {
+    api_token: String,
 }
+// Implement a request interceptor which always adds the authorization header with a specific API token to all requests
+impl tonic::service::Interceptor for ClientInterceptor {
+    fn call(&mut self, request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+        let mut mut_req: tonic::Request<()> = request;
+        let metadata = mut_req.metadata_mut();
+        metadata.append(
+            AsciiMetadataKey::from_bytes("Authorization".as_bytes()).unwrap(),
+            AsciiMetadataValue::try_from(format!("Bearer {}", self.api_token.as_str())).unwrap(),
+        );
 
-impl APITokenInterceptor {
-    fn new(token: &str) -> Result<APITokenInterceptor> {
-        let key = AsciiMetadataKey::from_static("api_token");
-        let value = AsciiMetadataValue::from_str(token).map_err(|_| Error::InvalidAPIToken {
-            message: "Could not encode configured token as ASCII.".to_owned(),
-        })?;
-
-        Ok(APITokenInterceptor { key, token: value })
-    }
-}
-
-impl Interceptor for APITokenInterceptor {
-    fn call(&mut self, mut request: Request<()>) -> std::result::Result<Request<()>, Status> {
-        request
-            .metadata_mut()
-            .append(self.key.clone(), self.token.clone());
-        Ok(request)
+        Ok(mut_req)
     }
 }
 
@@ -117,28 +111,37 @@ pub struct NFDIDataProvider {
     name: String,
     id: DataProviderId,
     project_id: String,
-    project_stub: ProjectServiceClient<InterceptedService<Channel, APITokenInterceptor>>,
-    dataset_stub: DatasetServiceClient<InterceptedService<Channel, APITokenInterceptor>>,
-    object_stub: ObjectLoadServiceClient<InterceptedService<Channel, APITokenInterceptor>>,
+    project_stub: ProjectServiceClient<InterceptedService<Channel, ClientInterceptor>>,
+    dataset_stub: CollectionServiceClient<InterceptedService<Channel, ClientInterceptor>>,
+    object_stub: ObjectServiceClient<InterceptedService<Channel, ClientInterceptor>>,
+    object_group_stub: ObjectGroupServiceClient<InterceptedService<Channel, ClientInterceptor>>,
 }
 
 impl NFDIDataProvider {
     /// Creates a new provider from the given definition.
-    async fn new(def: Box<NFDIDataProviderDefinition>) -> Result<NFDIDataProvider> {
+    async fn new(def: Box<ArunaDataProviderDefinition>) -> Result<NFDIDataProvider> {
         let url = def.api_url;
-        let channel = Endpoint::from_str(url.as_str())
-            .map_err(|_| Error::InvalidUri { uri_string: url })?
-            .connect()
-            .await?;
+        // Create connection to AOS instance gRPC gateway
+        let tls_config = ClientTlsConfig::new();
+        let endpoint = Channel::from_shared(url)
+            .unwrap()
+            .tls_config(tls_config)
+            .unwrap();
+        let channel = endpoint.connect().await.unwrap();
 
-        let interceptor = APITokenInterceptor::new(&def.api_token[..])?;
+        let interceptor = ClientInterceptor {
+            api_token: def.api_token,
+        };
 
         let project_stub =
             ProjectServiceClient::with_interceptor(channel.clone(), interceptor.clone());
         let dataset_stub =
-            DatasetServiceClient::with_interceptor(channel.clone(), interceptor.clone());
+            CollectionServiceClient::with_interceptor(channel.clone(), interceptor.clone());
 
-        let object_stub = ObjectLoadServiceClient::with_interceptor(channel, interceptor);
+        let object_stub =
+            ObjectServiceClient::with_interceptor(channel.clone(), interceptor.clone());
+
+        let object_group_stub = ObjectGroupServiceClient::with_interceptor(channel, interceptor);
 
         Ok(NFDIDataProvider {
             name: def.name,
@@ -147,6 +150,7 @@ impl NFDIDataProvider {
             project_stub,
             dataset_stub,
             object_stub,
+            object_group_stub,
         })
     }
 
@@ -159,16 +163,14 @@ impl NFDIDataProvider {
     }
 
     /// Extracts the geoengine metadata from a Dataset returnd from the core store
-    fn extract_metadata(
-        ds: &scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::models::v1::Dataset,
-    ) -> Result<GEMetadata> {
+    fn extract_metadata(ds: &CollectionOverview) -> Result<GEMetadata> {
         Ok(serde_json::from_slice::<GEMetadata>(
-            ds.metadata
+            ds.labels
                 .iter()
                 .find(|ds| ds.key.eq_ignore_ascii_case(metadata::METADATA_KEY))
                 .ok_or(Error::MissingNFDIMetaData)?
-                .metadata
-                .as_slice(),
+                .value
+                .as_bytes(),
         )?)
     }
 
@@ -178,11 +180,11 @@ impl NFDIDataProvider {
         let mut stub = self.dataset_stub.clone();
 
         let resp = stub
-            .get_dataset(GetDatasetRequest { id })
+            .get_collection_by_id(GetCollectionByIdRequest { collection_id: id })
             .await?
             .into_inner();
 
-        resp.dataset.ok_or(Error::InvalidDataId).and_then(|ds| {
+        resp.collection.ok_or(Error::InvalidDataId).and_then(|ds| {
             // Extract and parse geoengine metadata
             let md = Self::extract_metadata(&ds)?;
             Ok((self.map_layer(&ds, &md)?, md))
@@ -190,11 +192,7 @@ impl NFDIDataProvider {
     }
 
     /// Maps the `gRPC` dataset representation to geoengine's internal representation.
-    fn map_layer(
-        &self,
-        ds: &scienceobjectsdb_rust_api::sciobjectsdb::sciobjsdb::api::storage::models::v1::Dataset,
-        md: &GEMetadata,
-    ) -> Result<Layer> {
+    fn map_layer(&self, ds: &CollectionOverview, md: &GEMetadata) -> Result<Layer> {
         let id = ProviderLayerId {
             provider_id: self.id,
             layer_id: LayerId(ds.id.clone()),
@@ -287,25 +285,38 @@ impl NFDIDataProvider {
     /// Retrieves a file-object from the core-storage. It assumes, that the dataset consists
     /// only of a single object group with a single object (the file).
     async fn get_single_file_object(&self, id: &DataId) -> Result<Object> {
-        let mut ds_stub = self.dataset_stub.clone();
+        let mut og_stub = self.object_group_stub.clone();
 
-        let group = ds_stub
-            .get_dataset_object_groups(GetDatasetObjectGroupsRequest {
-                id: Self::dataset_nfdi_id(id)?,
+        let group = og_stub
+            .get_object_groups(GetObjectGroupsRequest {
+                collection_id: Self::dataset_nfdi_id(id)?,
                 page_request: None,
+                label_id_filter: None,
             })
             .await?
             .into_inner()
             .object_groups
+            .ok_or(Error::NoMainFileCandidateFound)?
+            .object_group_overviews
             .into_iter()
             .next()
             .ok_or(Error::NoMainFileCandidateFound)?;
 
-        group
-            .objects
+        Ok(og_stub
+            .get_object_group_objects(GetObjectGroupObjectsRequest {
+                collection_id: Self::dataset_nfdi_id(id)?,
+                group_id: group.id.clone(),
+                page_request: None,
+                meta_only: false,
+            })
+            .await?
+            .into_inner()
+            .object_group_objects
             .into_iter()
             .next()
-            .ok_or(Error::NoMainFileCandidateFound)
+            .ok_or(Error::NoMainFileCandidateFound)?
+            .object
+            .unwrap())
     }
 
     /// Creates the loading template for vector files. This is basically a loading
@@ -474,7 +485,8 @@ impl MetaDataProvider<OgrSourceDataset, VectorResultDescriptor, VectorQueryRecta
                 let result_descriptor = Self::create_vector_result_descriptor(md.crs.into(), &info);
                 let template = Self::vector_loading_template(&info, &result_descriptor);
 
-                let res = NFDIMetaData {
+                let res = ArunaMetaData {
+                    collection_id: id.external().unwrap().layer_id.0.clone(),
                     object_id: object.id,
                     template,
                     result_descriptor,
@@ -520,7 +532,8 @@ impl MetaDataProvider<GdalLoadingInfo, RasterResultDescriptor, RasterQueryRectan
                 let result_descriptor = Self::create_raster_result_descriptor(md.crs.into(), info);
                 let template = Self::raster_loading_template(info);
 
-                let res = NFDIMetaData {
+                let res = ArunaMetaData {
+                    collection_id: id.external().unwrap().layer_id.0.clone(),
                     object_id: object.id,
                     template,
                     result_descriptor,
@@ -563,17 +576,21 @@ impl LayerCollectionProvider for NFDIDataProvider {
             }
         );
 
-        let mut project_stub = self.project_stub.clone();
+        let mut dataset_stub = self.dataset_stub.clone();
 
-        let resp = project_stub
-            .get_project_datasets(GetProjectDatasetsRequest {
-                id: self.project_id.clone(),
+        let resp = dataset_stub
+            .get_collections(GetCollectionsRequest {
+                project_id: self.project_id.clone(),
+                label_or_id_filter: None,
+                page_request: None,
             })
             .await?
             .into_inner();
 
         let items = resp
-            .datasets
+            .collections
+            .unwrap()
+            .collection_overviews
             .into_iter()
             .map(|ds| {
                 CollectionItem::Layer(LayerListing {
@@ -605,20 +622,16 @@ impl LayerCollectionProvider for NFDIDataProvider {
     }
 
     async fn get_layer(&self, id: &LayerId) -> Result<Layer> {
-        let mut project_stub = self.project_stub.clone();
+        let mut dataset_stub = self.dataset_stub.clone();
 
-        let resp = project_stub
-            .get_project_datasets(GetProjectDatasetsRequest {
-                id: self.project_id.clone(),
+        let resp = dataset_stub
+            .get_collection_by_id(GetCollectionByIdRequest {
+                collection_id: id.0.clone(),
             })
             .await?
             .into_inner();
 
-        let dataset = resp
-            .datasets
-            .into_iter()
-            .find(|ds| ds.id == id.0)
-            .ok_or(Error::UnknownDataId)?;
+        let dataset = resp.collection.unwrap();
 
         let meta_data = Self::extract_metadata(&dataset)?;
 
@@ -759,21 +772,24 @@ impl ExpiringDownloadLink for GdalLoadingInfo {
 /// It stores an object-id, for which to generate new download links each
 /// time the `load_info()` function is called.
 #[derive(Clone, Debug)]
-struct NFDIMetaData<L, R, Q>
+struct ArunaMetaData<L, R, Q>
 where
     L: Debug + Clone + Send + Sync + ExpiringDownloadLink + 'static,
     R: Debug + Send + Sync + 'static + ResultDescriptor,
     Q: Debug + Clone + Send + Sync + 'static,
 {
     result_descriptor: R,
+    collection_id: String,
     object_id: String,
     template: L,
-    object_stub: ObjectLoadServiceClient<InterceptedService<Channel, APITokenInterceptor>>,
+    object_stub: ObjectServiceClient<
+        tonic::service::interceptor::InterceptedService<Channel, ClientInterceptor>,
+    >,
     _phantom: PhantomData<Q>,
 }
 
 #[async_trait::async_trait]
-impl<L, R, Q> MetaData<L, R, Q> for NFDIMetaData<L, R, Q>
+impl<L, R, Q> MetaData<L, R, Q> for ArunaMetaData<L, R, Q>
 where
     L: Debug + Clone + Send + Sync + ExpiringDownloadLink + 'static,
     R: Debug + Send + Sync + 'static + ResultDescriptor,
@@ -782,16 +798,16 @@ where
     async fn loading_info(&self, _query: Q) -> geoengine_operators::util::Result<L> {
         let mut stub = self.object_stub.clone();
         let url = stub
-            .create_download_link(CreateDownloadLinkRequest {
-                id: self.object_id.clone(),
-                range: None,
+            .get_download_url(GetDownloadUrlRequest {
+                collection_id: self.collection_id.clone(),
+                object_id: self.object_id.clone(),
             })
             .await
             .map_err(|source| geoengine_operators::error::Error::LoadingInfo {
                 source: Box::new(source),
             })?
             .into_inner();
-        self.template.new_link(url.download_link)
+        self.template.new_link(url.url.unwrap().url)
     }
 
     async fn result_descriptor(&self) -> geoengine_operators::util::Result<R> {
@@ -808,7 +824,7 @@ mod tests {
     use crate::api::model::datatypes::{DataId, DataProviderId, ExternalDataId, LayerId};
     use crate::datasets::external::nfdi::metadata::{GEMetadata, METADATA_KEY};
     use crate::datasets::external::nfdi::{
-        ExpiringDownloadLink, NFDIDataProvider, NFDIDataProviderDefinition,
+        ArunaDataProviderDefinition, DataProviderDefinition, ExpiringDownloadLink, NFDIDataProvider,
     };
     use crate::layers::external::DataProvider;
     use crate::layers::layer::LayerCollectionListOptions;
@@ -842,7 +858,7 @@ mod tests {
     use geoengine_operators::source::{OgrSource, OgrSourceDataset, OgrSourceParameters};
 
     mod wiremock_gen {
-        wiremock_grpc::generate!("sciobjsdb.api.storage.services.v1", TestProjectServer);
+        wiremock_grpc::generate!("aruna.api.storage.services.v1", TestProjectServer);
     }
     use wiremock_gen::*;
     use wiremock_grpc::*;
@@ -853,7 +869,7 @@ mod tests {
     const TOKEN: &str = "DUMMY";
 
     async fn new_provider_with_url(url: String) -> NFDIDataProvider {
-        let def = NFDIDataProviderDefinition {
+        let def = ArunaDataProviderDefinition {
             id: DataProviderId::from_str(PROVIDER_ID).unwrap(),
             api_token: TOKEN.to_string(),
             api_url: url,
@@ -914,253 +930,6 @@ mod tests {
                 "uri":"http://geoengine.io"
             }
         })
-    }
-
-    #[tokio::test]
-    async fn test_extract_meta_data_ok() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: vector_meta_data().to_string().into_bytes(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-        let md = NFDIDataProvider::extract_metadata(&ds).unwrap();
-        let des = serde_json::from_value::<GEMetadata>(vector_meta_data()).unwrap();
-        assert_eq!(des, md);
-    }
-
-    #[tokio::test]
-    async fn test_extract_meta_data_not_present() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-        assert!(NFDIDataProvider::extract_metadata(&ds).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_extract_meta_data_parse_error() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: b"{\"foo\": \"bar\"}".to_vec(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-        assert!(NFDIDataProvider::extract_metadata(&ds).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_map_vector_dataset() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: vector_meta_data().to_string().into_bytes(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-
-        let server = TestProjectServer::start_default().await;
-        let addr = format!("http://{}", server.address());
-        let provider = new_provider_with_url(addr).await;
-
-        let md = NFDIDataProvider::extract_metadata(&ds).unwrap();
-        let layer = provider.map_layer(&ds, &md).unwrap();
-        assert!(matches!(
-            md.data_type,
-            super::metadata::DataType::SingleVectorFile(_)
-        ));
-        assert_eq!(
-            json!({
-                "type": "Vector",
-                "operator": {
-                    "type": "OgrSource",
-                    "params": {
-                        "data": {
-                            "type": "external",
-                            "providerId": "86a7f7ce-1bab-4ce9-a32b-172c0f958ee0",
-                            "layerId": "C"
-                        },
-                        "attributeProjection": null,
-                        "attributeFilters": null
-                    }
-                }
-            }),
-            serde_json::to_value(&layer.workflow.operator).unwrap()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_map_raster_dataset() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: raster_meta_data().to_string().into_bytes(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-
-        let md = NFDIDataProvider::extract_metadata(&ds).unwrap();
-        assert!(matches!(
-            md.data_type,
-            super::metadata::DataType::SingleRasterFile(_)
-        ));
-
-        let server = TestProjectServer::start_default().await;
-        let addr = format!("http://{}", server.address());
-        let provider = new_provider_with_url(addr).await;
-
-        let layer = provider.map_layer(&ds, &md).unwrap();
-
-        assert_eq!(
-            json!({
-                "type": "Raster",
-                "operator": {
-                    "type": "GdalSource",
-                    "params": {
-                        "data": {
-                            "type": "external",
-                            "providerId": "86a7f7ce-1bab-4ce9-a32b-172c0f958ee0",
-                            "layerId": "C"
-                        }
-                    }
-                }
-            }),
-            serde_json::to_value(&layer.workflow.operator).unwrap()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_vector_loading_template() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: vector_meta_data().to_string().into_bytes(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-
-        let md = NFDIDataProvider::extract_metadata(&ds).unwrap();
-        let vi = match md.data_type {
-            super::metadata::DataType::SingleVectorFile(vi) => vi,
-            super::metadata::DataType::SingleRasterFile(_) => panic!("Expected vector description"),
-        };
-
-        let rd = NFDIDataProvider::create_vector_result_descriptor(md.crs.into(), &vi);
-
-        let template = NFDIDataProvider::vector_loading_template(&vi, &rd);
-
-        let url = template
-            .new_link("test".to_string())
-            .unwrap()
-            .file_name
-            .to_string_lossy()
-            .to_string();
-
-        assert_eq!("/vsicurl/test", url.as_str());
-    }
-
-    #[tokio::test]
-    async fn test_raster_loading_template() {
-        let ds = Dataset {
-            id: DATASET_ID.to_string(),
-            name: "Test".to_string(),
-            description: "Test".to_string(),
-            created: None,
-            labels: vec![],
-            metadata: vec![Metadata {
-                key: METADATA_KEY.to_string(),
-                labels: vec![],
-                metadata: raster_meta_data().to_string().into_bytes(),
-                schema: None,
-            }],
-            project_id: PROJECT_ID.to_string(),
-            is_public: true,
-            status: 0,
-            bucket: String::new(),
-        };
-
-        let md = NFDIDataProvider::extract_metadata(&ds).unwrap();
-        let ri = match md.data_type {
-            super::metadata::DataType::SingleRasterFile(ri) => ri,
-            super::metadata::DataType::SingleVectorFile(_) => panic!("Expected raster description"),
-        };
-
-        let template = NFDIDataProvider::raster_loading_template(&ri);
-
-        let url = template
-            .new_link("test".to_string())
-            .unwrap()
-            .info
-            .next()
-            .unwrap()
-            .unwrap()
-            .params
-            .unwrap()
-            .file_path
-            .to_string_lossy()
-            .to_string();
-
-        assert_eq!("/vsicurl/test", url.as_str());
     }
 
     #[tokio::test]

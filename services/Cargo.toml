@@ -14,7 +14,7 @@ nature40 = ["xml"]
 xml = ["quick-xml"]
 postgres = ["postgres-types", "bb8-postgres"]
 odm = ["pro"]
-nfdi = ["postgres", "geoengine-datatypes/postgres", "scienceobjectsdb_rust_api", "pro"]
+nfdi = ["postgres", "geoengine-datatypes/postgres", "scienceobjectsdb_rust_api", "aruna-rust-api", "pro"]
 ebv = []
 # This compiles Geo Engine Pro
 pro = ["postgres", "geoengine-operators/pro", "geoengine-datatypes/pro"]
@@ -26,6 +26,7 @@ actix-multipart = "0.4"
 actix-rt = "2.6"
 actix-web = { version = "4.2", features = ["macros", "compress-brotli", "compress-gzip", "cookies"], default-features = false } # TODO: use default feautures when https://github.com/actix/actix-web/issues/2869 is resolved
 actix-web-httpauth = "0.8"
+aruna-rust-api = { version = "0.5.0", optional = true }
 async-trait = "0.1"
 base64 = "0.13"
 bb8-postgres = { version = "0.8", features = ["with-uuid-1", "with-chrono-0_4", "with-serde_json-1"], optional = true }
@@ -74,7 +75,7 @@ time = "0.3"
 tokio = { version = "1.15", features = ["macros", "fs", "signal", "sync", "rt-multi-thread"] }
 tokio-postgres = { version = "0.7" }
 tokio-util = { version = "0.7", features = ["codec"] }
-tonic = { version = "0.6", features = ["tls", "tls-roots"] } # must be compatible with `scienceobjectsdb_rust_api`
+tonic = { version = "0.8.2", features = ["tls", "tls-roots"] } # must be compatible with `scienceobjectsdb_rust_api`
 tracing = "0.1"
 tracing-actix-web = "0.6"
 tracing-opentelemetry = "0.18"
