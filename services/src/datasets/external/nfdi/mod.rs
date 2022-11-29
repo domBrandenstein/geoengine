@@ -347,7 +347,7 @@ impl NFDIDataProvider {
             }
         }
 
-        let link = format!("/vsicurl/{}", URL_REPLACEMENT);
+        let link = format!("/vsicurl_streaming/{}", URL_REPLACEMENT);
 
         let column_spec = OgrSourceColumnSpec {
             format_specifics: None,
@@ -414,7 +414,7 @@ impl NFDIDataProvider {
         let part = GdalLoadingInfoTemporalSlice {
             time: info.time_interval,
             params: Some(GdalDatasetParameters {
-                file_path: PathBuf::from(format!("/vsicurl/{}", URL_REPLACEMENT)),
+                file_path: PathBuf::from(format!("/vsicurl_streaming/{}", URL_REPLACEMENT)),
                 rasterband_channel: info.rasterband_channel,
                 geo_transform: info.geo_transform,
                 width: info.width,
