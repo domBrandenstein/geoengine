@@ -1,0 +1,6 @@
+{
+  "type": "IoerDataProviderDefinition",
+  "name": "Ioer",
+  "apiKey": "x",
+  "cacheTtl": 0
+}

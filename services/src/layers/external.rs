@@ -4,6 +4,7 @@ use crate::datasets::external::edr::EdrDataProviderDefinition;
 use crate::datasets::external::gbif::GbifDataProviderDefinition;
 use crate::datasets::external::gfbio_abcd::GfbioAbcdDataProviderDefinition;
 use crate::datasets::external::gfbio_collections::GfbioCollectionsDataProviderDefinition;
+use crate::datasets::external::ioer::IoerDataProviderDefinition;
 use crate::datasets::external::netcdfcf::EbvPortalDataProviderDefinition;
 use crate::datasets::external::netcdfcf::NetCdfCfDataProviderDefinition;
 use crate::datasets::external::pangaea::PangaeaDataProviderDefinition;
@@ -89,6 +90,7 @@ pub enum TypedDataProviderDefinition {
     NetCdfCfDataProviderDefinition(NetCdfCfDataProviderDefinition),
     PangaeaDataProviderDefinition(PangaeaDataProviderDefinition),
     EdrDataProviderDefinition(EdrDataProviderDefinition),
+    IoerDataProviderDefinition(IoerDataProviderDefinition),
 }
 
 impl From<ArunaDataProviderDefinition> for TypedDataProviderDefinition {
@@ -139,6 +141,12 @@ impl From<EdrDataProviderDefinition> for TypedDataProviderDefinition {
     }
 }
 
+impl From<IoerDataProviderDefinition> for TypedDataProviderDefinition {
+    fn from(def: IoerDataProviderDefinition) -> Self {
+        Self::IoerDataProviderDefinition(def)
+    }
+}
+
 impl From<TypedDataProviderDefinition> for Box<dyn DataProviderDefinition> {
     fn from(typed: TypedDataProviderDefinition) -> Self {
         match typed {
@@ -152,6 +160,7 @@ impl From<TypedDataProviderDefinition> for Box<dyn DataProviderDefinition> {
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(def) => Box::new(def),
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(def) => Box::new(def),
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => Box::new(def),
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => Box::new(def),
         }
     }
 }
@@ -167,6 +176,7 @@ impl AsRef<dyn DataProviderDefinition> for TypedDataProviderDefinition {
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(def) => def,
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(def) => def,
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => def,
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => def,
         }
     }
 }
@@ -199,6 +209,9 @@ impl DataProviderDefinition for TypedDataProviderDefinition {
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => {
                 Box::new(def).initialize().await
             }
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => {
+                Box::new(def).initialize().await
+            }
         }
     }
 
@@ -214,6 +227,7 @@ impl DataProviderDefinition for TypedDataProviderDefinition {
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(def) => def.type_name(),
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(def) => def.type_name(),
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => def.type_name(),
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => def.type_name(),
         }
     }
 
@@ -227,6 +241,7 @@ impl DataProviderDefinition for TypedDataProviderDefinition {
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(def) => def.name(),
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(def) => def.name(),
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => def.name(),
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => def.name(),
         }
     }
 
@@ -240,6 +255,7 @@ impl DataProviderDefinition for TypedDataProviderDefinition {
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(def) => def.id(),
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(def) => def.id(),
             TypedDataProviderDefinition::EdrDataProviderDefinition(def) => def.id(),
+            TypedDataProviderDefinition::IoerDataProviderDefinition(def) => def.id(),
         }
     }
 }

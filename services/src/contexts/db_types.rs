@@ -1,3 +1,4 @@
+use crate::datasets::external::ioer::IoerDataProviderDefinition;
 use crate::{
     datasets::{
         external::{
@@ -617,6 +618,7 @@ pub struct TypedDataProviderDefinitionDbType {
     net_cdf_cf_data_provider_definition: Option<NetCdfCfDataProviderDefinition>,
     pangaea_data_provider_definition: Option<PangaeaDataProviderDefinition>,
     edr_data_provider_definition: Option<EdrDataProviderDefinition>,
+    ioer_data_provider_definition: Option<IoerDataProviderDefinition>,
 }
 
 impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
@@ -632,6 +634,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                     net_cdf_cf_data_provider_definition: None,
                     pangaea_data_provider_definition: None,
                     edr_data_provider_definition: None,
+                    ioer_data_provider_definition: None,
                 }
             }
             TypedDataProviderDefinition::GbifDataProviderDefinition(data_provider_definition) => {
@@ -644,6 +647,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                     net_cdf_cf_data_provider_definition: None,
                     pangaea_data_provider_definition: None,
                     edr_data_provider_definition: None,
+                    ioer_data_provider_definition: None,
                 }
             }
             TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(
@@ -657,6 +661,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             },
             TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(
                 data_provider_definition,
@@ -669,6 +674,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             },
             TypedDataProviderDefinition::EbvPortalDataProviderDefinition(
                 data_provider_definition,
@@ -681,6 +687,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             },
             TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(
                 data_provider_definition,
@@ -693,6 +700,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                 net_cdf_cf_data_provider_definition: Some(data_provider_definition.clone()),
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             },
             TypedDataProviderDefinition::PangaeaDataProviderDefinition(
                 data_provider_definition,
@@ -705,6 +713,7 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: Some(data_provider_definition.clone()),
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             },
             TypedDataProviderDefinition::EdrDataProviderDefinition(data_provider_definition) => {
                 Self {
@@ -716,6 +725,20 @@ impl From<&TypedDataProviderDefinition> for TypedDataProviderDefinitionDbType {
                     net_cdf_cf_data_provider_definition: None,
                     pangaea_data_provider_definition: None,
                     edr_data_provider_definition: Some(data_provider_definition.clone()),
+                    ioer_data_provider_definition: None,
+                }
+            }
+            TypedDataProviderDefinition::IoerDataProviderDefinition(data_provider_definition) => {
+                Self {
+                    aruna_data_provider_definition: None,
+                    gbif_data_provider_definition: None,
+                    gfbio_abcd_data_provider_definition: None,
+                    gfbio_collections_data_provider_definition: None,
+                    ebv_portal_data_provider_definition: None,
+                    net_cdf_cf_data_provider_definition: None,
+                    pangaea_data_provider_definition: None,
+                    edr_data_provider_definition: None,
+                    ioer_data_provider_definition: Some(data_provider_definition.clone()),
                 }
             }
         }
@@ -736,8 +759,8 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 ebv_portal_data_provider_definition: None,
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
-
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(TypedDataProviderDefinition::ArunaDataProviderDefinition(
                 data_provider_definition,
             )),
@@ -750,6 +773,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(TypedDataProviderDefinition::GbifDataProviderDefinition(
                 data_provider_definition,
             )),
@@ -762,6 +786,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(
                 TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(
                     data_provider_definition,
@@ -776,6 +801,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(
                 TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(
                     data_provider_definition,
@@ -790,6 +816,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(
                 TypedDataProviderDefinition::EbvPortalDataProviderDefinition(
                     data_provider_definition,
@@ -804,6 +831,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: Some(data_provider_definition),
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(TypedDataProviderDefinition::NetCdfCfDataProviderDefinition(
                 data_provider_definition,
             )),
@@ -816,6 +844,7 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: Some(data_provider_definition),
                 edr_data_provider_definition: None,
+                ioer_data_provider_definition: None,
             } => Ok(TypedDataProviderDefinition::PangaeaDataProviderDefinition(
                 data_provider_definition,
             )),
@@ -828,7 +857,21 @@ impl TryFrom<TypedDataProviderDefinitionDbType> for TypedDataProviderDefinition 
                 net_cdf_cf_data_provider_definition: None,
                 pangaea_data_provider_definition: None,
                 edr_data_provider_definition: Some(data_provider_definition),
+                ioer_data_provider_definition: None,
             } => Ok(TypedDataProviderDefinition::EdrDataProviderDefinition(
+                data_provider_definition,
+            )),
+            TypedDataProviderDefinitionDbType {
+                aruna_data_provider_definition: None,
+                gbif_data_provider_definition: None,
+                gfbio_abcd_data_provider_definition: None,
+                gfbio_collections_data_provider_definition: None,
+                ebv_portal_data_provider_definition: None,
+                net_cdf_cf_data_provider_definition: None,
+                pangaea_data_provider_definition: None,
+                edr_data_provider_definition: None,
+                ioer_data_provider_definition: Some(data_provider_definition),
+            } => Ok(TypedDataProviderDefinition::IoerDataProviderDefinition(
                 data_provider_definition,
             )),
             _ => Err(Error::UnexpectedInvalidDbTypeConversion),
