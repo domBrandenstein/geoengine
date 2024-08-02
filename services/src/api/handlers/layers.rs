@@ -116,7 +116,7 @@ where
                     .service(
                         web::resource("/{provider}")
                             .route(web::get().to(get_provider_definition::<C>))
-                            .route(web::patch().to(update_provider_definition::<C>))
+                            .route(web::put().to(update_provider_definition::<C>))
                             .route(web::delete().to(delete_provider::<C>)),
                     ),
             ),
@@ -1256,7 +1256,7 @@ async fn get_provider_definition<C: ApplicationContext>(
 /// Update an existing provider's definition
 #[utoipa::path(
     tag = "Layers",
-    patch,
+    put,
     path = "/layerDb/providers/{provider}",
     params(
         ("provider" = uuid::Uuid, description = "Layer provider id"),
