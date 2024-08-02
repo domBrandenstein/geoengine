@@ -159,6 +159,8 @@ CREATE TABLE permissions (
     ) ON DELETE CASCADE,
     project_id uuid REFERENCES projects (id) ON DELETE CASCADE,
     ml_model_id uuid REFERENCES ml_models (id) ON DELETE CASCADE,
+    provider_id uuid REFERENCES layer_providers (id) ON DELETE CASCADE,
+    pro_provider_id uuid REFERENCES pro_layer_providers (id) ON DELETE CASCADE
     CHECK (
         (
             (dataset_id IS NOT NULL)::integer
@@ -166,6 +168,8 @@ CREATE TABLE permissions (
             + (layer_collection_id IS NOT NULL)::integer
             + (project_id IS NOT NULL)::integer
             + (ml_model_id IS NOT NULL)::integer
+            + (provider_id IS NOT NULL):: integer
+            + (pro_provider_id IS NOT NULL):: integer
         ) = 1
     )
 );
@@ -188,6 +192,18 @@ CREATE UNIQUE INDEX ON permissions (
     role_id,
     permission,
     project_id
+);
+
+CREATE UNIQUE INDEX ON permissions (
+    role_id,
+    permission,
+    provider_id
+);
+
+CREATE UNIQUE INDEX ON permissions (
+    role_id,
+    permission,
+    pro_provider_id
 );
 
 CREATE UNIQUE INDEX ON permissions (
@@ -238,6 +254,28 @@ SELECT
 FROM user_roles AS r
 INNER JOIN permissions AS p ON (
     r.role_id = p.role_id AND p.layer_id IS NOT NULL
+);
+
+CREATE VIEW user_permitted_providers
+AS
+SELECT
+    r.user_id,
+    p.provider_id,
+    p.permission
+FROM user_roles AS r
+INNER JOIN permissions AS p ON (
+    r.role_id = p.role_id AND p.provider_id IS NOT NULL
+);
+
+CREATE VIEW user_permitted_pro_providers
+AS
+SELECT
+    r.user_id,
+    p.pro_provider_id,
+    p.permission
+FROM user_roles AS r
+INNER JOIN permissions AS p ON (
+    r.role_id = p.role_id AND p.pro_provider_id IS NOT NULL
 );
 
 CREATE TABLE oidc_session_tokens (

@@ -40,11 +40,12 @@ use snafu::ensure;
 use std::fmt::Write;
 use tokio::time::{timeout, Duration};
 use tokio_postgres::NoTls;
+use utoipa::ToSchema;
 
 pub const GBIF_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x1c01_dbb9_e3ab_f9a2_06f5_228b_a4b6_bf7a);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GbifDataProviderDefinition {
     pub name: String,

@@ -5,7 +5,7 @@ use crate::layers::listing::LayerCollectionId;
 use crate::machine_learning::MlModelId;
 use crate::projects::ProjectId;
 use async_trait::async_trait;
-use geoengine_datatypes::dataset::{DatasetId, LayerId};
+use geoengine_datatypes::dataset::{DataProviderId, DatasetId, LayerId};
 use postgres_types::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
@@ -100,6 +100,8 @@ pub enum ResourceId {
     Project(ProjectId),
     DatasetId(DatasetId),
     MlModel(MlModelId),
+    DataProvider(DataProviderId),
+    ProDataProvider(DataProviderId),
 }
 
 impl std::fmt::Display for ResourceId {
@@ -112,6 +114,8 @@ impl std::fmt::Display for ResourceId {
             ResourceId::Project(project_id) => write!(f, "project:{}", project_id.0),
             ResourceId::DatasetId(dataset_id) => write!(f, "dataset:{}", dataset_id.0),
             ResourceId::MlModel(ml_model_id) => write!(f, "mlModel:{}", ml_model_id.0),
+            ResourceId::DataProvider(provider_id) => write!(f, "provider:{}", provider_id.0),
+            ResourceId::ProDataProvider(provider_id) => write!(f, "pro_provider:{}", provider_id.0),
         }
     }
 }
@@ -140,6 +144,12 @@ impl From<DatasetId> for ResourceId {
     }
 }
 
+impl From<DataProviderId> for ResourceId {
+    fn from(provider_id: DataProviderId) -> Self {
+        ResourceId::DataProvider(provider_id)
+    }
+}
+
 impl TryFrom<(String, String)> for ResourceId {
     type Error = Error;
 
@@ -153,6 +163,12 @@ impl TryFrom<(String, String)> for ResourceId {
             "dataset" => {
                 ResourceId::DatasetId(DatasetId(Uuid::from_str(&value.1).context(error::Uuid)?))
             }
+            "provider" => ResourceId::DataProvider(DataProviderId(
+                Uuid::from_str(&value.1).context(error::Uuid)?,
+            )),
+            "pro_provider" => ResourceId::ProDataProvider(DataProviderId(
+                Uuid::from_str(&value.1).context(error::Uuid)?,
+            )),
             _ => {
                 return Err(Error::InvalidResourceId {
                     resource_type: value.0,

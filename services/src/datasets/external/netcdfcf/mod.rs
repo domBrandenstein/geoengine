@@ -51,6 +51,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use walkdir::{DirEntry, WalkDir};
 
 pub use self::database::NetCdfCfProviderDb;
@@ -74,15 +75,17 @@ pub(crate) type Result<T, E = NetCdfCf4DProviderError> = std::result::Result<T, 
 pub const NETCDF_CF_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x1690_c483_b17f_4d98_95c8_00a6_4849_cd0b);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NetCdfCfDataProviderDefinition {
     pub name: String,
     pub description: String,
     pub priority: Option<i16>,
     /// Path were the `NetCDF` data can be found
+    #[schema(value_type = String)]
     pub data: PathBuf,
     /// Path were overview files are stored
+    #[schema(value_type = String)]
     pub overviews: PathBuf,
     #[serde(default)]
     pub cache_ttl: CacheTtlSeconds,

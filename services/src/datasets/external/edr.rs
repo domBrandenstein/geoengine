@@ -43,6 +43,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::OnceLock;
 use url::Url;
+use utoipa::ToSchema;
 
 static IS_FILETYPE_RASTER: OnceLock<HashMap<&'static str, bool>> = OnceLock::new();
 
@@ -55,7 +56,7 @@ fn init_is_filetype_raster() -> HashMap<&'static str, bool> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EdrDataProviderDefinition {
     pub name: String,
@@ -73,7 +74,7 @@ pub struct EdrDataProviderDefinition {
     pub provenance: Option<Vec<Provenance>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub struct EdrVectorSpec {
     pub x: String,
     pub y: Option<String>,

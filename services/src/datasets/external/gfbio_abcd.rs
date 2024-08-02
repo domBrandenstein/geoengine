@@ -41,11 +41,12 @@ use serde::{Deserialize, Serialize};
 use snafu::ensure;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use utoipa::ToSchema;
 
 pub const GFBIO_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x907f_9f5b_0304_4a0e_a5ef_28de_62d1_c0f9);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GfbioAbcdDataProviderDefinition {
     pub name: String,

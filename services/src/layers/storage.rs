@@ -130,5 +130,18 @@ pub trait LayerProviderDb: Send + Sync + 'static {
 
     async fn load_layer_provider(&self, id: DataProviderId) -> Result<Box<dyn DataProvider>>;
 
+    async fn get_layer_provider_definition(
+        &self,
+        id: DataProviderId,
+    ) -> Result<TypedDataProviderDefinition>;
+
+    async fn update_layer_provider_definition(
+        &self,
+        id: DataProviderId,
+        provider: TypedDataProviderDefinition,
+    ) -> Result<()>;
+
+    async fn delete_layer_provider(&self, id: DataProviderId) -> Result<()>;
+
     // TODO: share/remove/update layer providers
 }

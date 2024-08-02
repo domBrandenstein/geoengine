@@ -1,4 +1,3 @@
-use crate::error;
 use crate::layers::external::TypedDataProviderDefinition;
 use crate::layers::layer::{Property, UpdateLayer, UpdateLayerCollection};
 use crate::layers::listing::{
@@ -11,6 +10,7 @@ use crate::layers::postgres_layer_db::{
 use crate::pro::contexts::ProPostgresDb;
 use crate::pro::datasets::TypedProDataProviderDefinition;
 use crate::pro::permissions::postgres_permissiondb::TxPermissionDb;
+use crate::pro::permissions::ResourceId::ProDataProvider;
 use crate::pro::permissions::{Permission, RoleId};
 use crate::{
     error::Result,
@@ -37,7 +37,7 @@ use bb8_postgres::tokio_postgres::{
 use geoengine_datatypes::dataset::{DataProviderId, LayerId};
 use geoengine_datatypes::error::BoxedResultExt;
 use geoengine_datatypes::util::HashMapTextTextDbType;
-use snafu::{ensure, ResultExt};
+use snafu::ResultExt;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -766,23 +766,14 @@ where
         &self,
         provider: TypedDataProviderDefinition,
     ) -> Result<DataProviderId> {
-        ensure!(self.session.is_admin(), error::PermissionDenied);
-
-        let conn = self.conn_pool.get().await?;
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
 
         let prio = DataProviderDefinition::<Self>::priority(&provider);
-        let clamp_prio = prio.clamp(-1000, 1000);
 
-        if prio != clamp_prio {
-            log::warn!(
-                "The priority of the provider {} is out of range! --> clamped {} to {}",
-                DataProviderDefinition::<Self>::name(&provider),
-                prio,
-                clamp_prio
-            );
-        }
+        let clamp_prio = Self::clamp_prio(&provider, prio);
 
-        let stmt = conn
+        let stmt = tx
             .prepare(
                 "
               INSERT INTO layer_providers (
@@ -797,7 +788,7 @@ where
             .await?;
 
         let id = DataProviderDefinition::<Self>::id(&provider);
-        conn.execute(
+        tx.execute(
             &stmt,
             &[
                 &id,
@@ -808,6 +799,23 @@ where
             ],
         )
         .await?;
+
+        let stmt = tx
+            .prepare(
+                "
+            INSERT INTO permissions (role_id, permission, provider_id)
+            VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;",
+            )
+            .await?;
+
+        tx.execute(
+            &stmt,
+            &[&RoleId::from(self.session.user.id), &Permission::Owner, &id],
+        )
+        .await?;
+
+        tx.commit().await?;
+
         Ok(id)
     }
 
@@ -815,7 +823,6 @@ where
         &self,
         options: LayerProviderListingOptions,
     ) -> Result<Vec<LayerProviderListing>> {
-        // TODO: permission
         let conn = self.conn_pool.get().await?;
 
         let stmt = conn
@@ -827,9 +834,11 @@ where
                         type_name,
                         priority
                     FROM 
-                        layer_providers
+                        user_permitted_providers up
+                        JOIN layer_providers p ON (up.provider_id = p.id)
                     WHERE
-                        priority > -1000
+                        up.user_id = $3
+                        AND priority > -1000
                     UNION ALL
                     SELECT 
                         id, 
@@ -837,9 +846,11 @@ where
                         type_name,
                         priority
                     FROM 
-                        pro_layer_providers
+                        user_permitted_pro_providers up
+                        JOIN pro_layer_providers p ON (up.pro_provider_id = p.id)
                     WHERE
-                        priority > -1000
+                        up.user_id = $3
+                        AND priority > -1000
                 )
                 ORDER BY priority desc, name ASC
                 LIMIT $1 
@@ -850,7 +861,11 @@ where
         let rows = conn
             .query(
                 &stmt,
-                &[&i64::from(options.limit), &i64::from(options.offset)],
+                &[
+                    &i64::from(options.limit),
+                    &i64::from(options.offset),
+                    &self.session.user.id,
+                ],
             )
             .await?;
 
@@ -865,10 +880,10 @@ where
     }
 
     async fn load_layer_provider(&self, id: DataProviderId) -> Result<Box<dyn DataProvider>> {
-        // TODO: permissions
-        let conn = self.conn_pool.get().await?;
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
 
-        let stmt = conn
+        let stmt = tx
             .prepare(
                 "SELECT
                     definition, NULL AS pro_definition
@@ -886,9 +901,15 @@ where
             )
             .await?;
 
-        let row = conn.query_one(&stmt, &[&id]).await?;
+        let row = tx.query_one(&stmt, &[&id]).await?;
 
         if let Some(definition) = row.get::<_, Option<TypedDataProviderDefinition>>(0) {
+            self.ensure_permission_in_tx(id.into(), Permission::Read, &tx)
+                .await
+                .boxed_context(crate::error::PermissionDb)?;
+
+            tx.commit().await?;
+
             return Box::new(definition)
                 .initialize(ProPostgresDb {
                     conn_pool: self.conn_pool.clone(),
@@ -897,6 +918,12 @@ where
                 .await;
         }
 
+        self.ensure_permission_in_tx(ProDataProvider(id), Permission::Read, &tx)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        tx.commit().await?;
+
         let pro_definition: TypedProDataProviderDefinition = row.get(1);
         Box::new(pro_definition)
             .initialize(ProPostgresDb {
@@ -904,6 +931,129 @@ where
                 session: self.session.clone(),
             })
             .await
+    }
+
+    async fn get_layer_provider_definition(
+        &self,
+        id: DataProviderId,
+    ) -> Result<TypedDataProviderDefinition> {
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
+
+        self.ensure_permission_in_tx(id.into(), Permission::Read, &tx)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        let stmt = tx
+            .prepare(
+                "
+               SELECT
+                   definition
+               FROM
+                   layer_providers
+               WHERE
+                   id = $1",
+            )
+            .await?;
+
+        let row = tx.query_one(&stmt, &[&id]).await?;
+
+        tx.commit().await?;
+
+        Ok(row.get(0))
+    }
+
+    async fn update_layer_provider_definition(
+        &self,
+        id: DataProviderId,
+        provider: TypedDataProviderDefinition,
+    ) -> Result<()> {
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
+
+        self.ensure_permission_in_tx(id.into(), Permission::Read, &tx)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        let prio = DataProviderDefinition::<Self>::priority(&provider);
+
+        let clamp_prio = Self::clamp_prio(&provider, prio);
+
+        let stmt = tx
+            .prepare(
+                "
+              UPDATE layer_providers
+              SET
+                type_name = $2,
+                name = $3,
+                definition = $4,
+                priority = $5
+              WHERE id = $1
+              ",
+            )
+            .await?;
+
+        tx.execute(
+            &stmt,
+            &[
+                &id,
+                &DataProviderDefinition::<Self>::type_name(&provider),
+                &DataProviderDefinition::<Self>::name(&provider),
+                &provider,
+                &clamp_prio,
+            ],
+        )
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    async fn delete_layer_provider(&self, id: DataProviderId) -> Result<()> {
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
+
+        self.ensure_permission_in_tx(id.into(), Permission::Owner, &tx)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        let stmt = tx
+            .prepare(
+                "
+              DELETE FROM layer_providers
+              WHERE id = $1
+              ",
+            )
+            .await?;
+
+        tx.execute(&stmt, &[&id]).await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+}
+
+impl<Tls> ProPostgresDb<Tls>
+where
+    <<Tls as MakeTlsConnect<Socket>>::TlsConnect as TlsConnect<Socket>>::Future: Send,
+    <Tls as MakeTlsConnect<Socket>>::Stream: Send + Sync,
+    <Tls as MakeTlsConnect<Socket>>::TlsConnect: Send,
+    Tls: 'static + Clone + MakeTlsConnect<Socket> + Send + Sync + std::fmt::Debug,
+{
+    fn clamp_prio(provider: &TypedDataProviderDefinition, prio: i16) -> i16 {
+        let clamp_prio = prio.clamp(-1000, 1000);
+
+        if prio != clamp_prio {
+            log::warn!(
+                "The priority of the provider {} is out of range! --> clamped {} to {}",
+                DataProviderDefinition::<Self>::name(provider),
+                prio,
+                clamp_prio
+            );
+        }
+        clamp_prio
     }
 }
 
@@ -927,11 +1077,11 @@ where
         &self,
         provider: TypedProDataProviderDefinition,
     ) -> Result<DataProviderId> {
-        ensure!(self.session.is_admin(), error::PermissionDenied);
-
-        let conn = self.conn_pool.get().await?;
+        let mut conn = self.conn_pool.get().await?;
+        let tx = conn.build_transaction().start().await?;
 
         let prio = DataProviderDefinition::<Self>::priority(&provider);
+
         let clamp_prio = prio.clamp(-1000, 1000);
 
         if prio != clamp_prio {
@@ -943,12 +1093,12 @@ where
             );
         }
 
-        let stmt = conn
+        let stmt = tx
             .prepare(
                 "
               INSERT INTO pro_layer_providers (
-                  id, 
-                  type_name, 
+                  id,
+                  type_name,
                   name,
                   definition,
                   priority
@@ -958,7 +1108,7 @@ where
             .await?;
 
         let id = DataProviderDefinition::<Self>::id(&provider);
-        conn.execute(
+        tx.execute(
             &stmt,
             &[
                 &id,
@@ -969,6 +1119,23 @@ where
             ],
         )
         .await?;
+
+        let stmt = tx
+            .prepare(
+                "
+            INSERT INTO permissions (role_id, permission, pro_provider_id)
+            VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;",
+            )
+            .await?;
+
+        tx.execute(
+            &stmt,
+            &[&RoleId::from(self.session.user.id), &Permission::Owner, &id],
+        )
+        .await?;
+
+        tx.commit().await?;
+
         Ok(id)
     }
 }

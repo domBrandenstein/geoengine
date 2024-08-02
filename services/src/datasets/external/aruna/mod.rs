@@ -18,15 +18,6 @@ use aruna_rust_api::api::storage::services::v2::{
     GetDatasetRequest, GetDatasetsRequest, GetDownloadUrlRequest, GetObjectsRequest,
     GetProjectRequest,
 };
-use postgres_types::{FromSql, ToSql};
-use serde::{Deserialize, Serialize};
-use snafu::ensure;
-use tonic::codegen::InterceptedService;
-use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
-use tonic::service::Interceptor;
-use tonic::transport::{Channel, Endpoint};
-use tonic::{Request, Status};
-
 use geoengine_datatypes::collections::VectorDataType;
 use geoengine_datatypes::dataset::{DataId, DataProviderId, LayerId};
 use geoengine_datatypes::primitives::CacheTtlSeconds;
@@ -46,6 +37,15 @@ use geoengine_operators::source::{
     OgrSourceColumnSpec, OgrSourceDataset, OgrSourceDatasetTimeType, OgrSourceDurationSpec,
     OgrSourceErrorSpec, OgrSourceParameters, OgrSourceTimeFormat,
 };
+use postgres_types::{FromSql, ToSql};
+use serde::{Deserialize, Serialize};
+use snafu::ensure;
+use tonic::codegen::InterceptedService;
+use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
+use tonic::service::Interceptor;
+use tonic::transport::{Channel, Endpoint};
+use tonic::{Request, Status};
+use utoipa::ToSchema;
 
 use crate::contexts::GeoEngineDb;
 use crate::datasets::external::aruna::metadata::{DataType, GEMetadata, RasterInfo, VectorInfo};
@@ -72,7 +72,7 @@ type Result<T, E = ArunaProviderError> = std::result::Result<T, E>;
 
 const URL_REPLACEMENT: &str = "%URL%";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ArunaDataProviderDefinition {
     pub id: DataProviderId,

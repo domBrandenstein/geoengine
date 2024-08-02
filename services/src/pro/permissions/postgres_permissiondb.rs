@@ -32,6 +32,8 @@ impl ResourceTypeName for ResourceId {
             ResourceId::Project(_) => "project_id",
             ResourceId::DatasetId(_) => "dataset_id",
             ResourceId::MlModel(_) => "ml_model_id",
+            ResourceId::DataProvider(_) => "provider_id",
+            ResourceId::ProDataProvider(_) => "pro_provider_id",
         }
     }
 
@@ -50,6 +52,8 @@ impl ResourceTypeName for ResourceId {
             ResourceId::Project(id) => Ok(id.0),
             ResourceId::DatasetId(id) => Ok(id.0),
             ResourceId::MlModel(id) => Ok(id.0),
+            ResourceId::DataProvider(id) => Ok(id.0),
+            ResourceId::ProDataProvider(id) => Ok(id.0),
         }
     }
 }

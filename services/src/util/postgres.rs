@@ -1,8 +1,9 @@
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Config;
+use utoipa::ToSchema;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 pub struct DatabaseConnectionConfig {
     pub host: String,
     pub port: u16,

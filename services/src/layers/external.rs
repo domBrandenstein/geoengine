@@ -22,6 +22,7 @@ use geoengine_operators::engine::{
 use geoengine_operators::mock::MockDatasetDataSourceLoadingInfo;
 use geoengine_operators::source::{GdalLoadingInfo, OgrSourceDataset};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[async_trait]
 pub trait DataProviderDefinition<D: GeoEngineDb>: Send + Sync + std::fmt::Debug {
@@ -63,7 +64,7 @@ pub trait DataProvider: LayerCollectionProvider
     async fn provenance(&self, id: &DataId) -> Result<ProvenanceOutput>;
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(tag = "type")] // TODO: rename_all = "camelCase"
 #[allow(clippy::enum_variant_names)] // TODO: think about better names
 pub enum TypedDataProviderDefinition {

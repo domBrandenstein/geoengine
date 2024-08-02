@@ -1,9 +1,11 @@
-use crate::api::model::datatypes::{DataProviderId, LayerId};
+use super::tasks::TaskResponse;
+use crate::api::model::datatypes::LayerId;
 use crate::api::model::responses::IdResponse;
 use crate::contexts::ApplicationContext;
 use crate::datasets::{schedule_raster_dataset_from_workflow_task, RasterDatasetFromWorkflow};
 use crate::error::Error::NotImplemented;
 use crate::error::{Error, Result};
+use crate::layers::external::TypedDataProviderDefinition;
 use crate::layers::layer::{
     AddLayer, AddLayerCollection, CollectionItem, LayerCollection, LayerCollectionListing,
     ProviderLayerCollectionId, UpdateLayer, UpdateLayerCollection,
@@ -18,13 +20,12 @@ use crate::workflows::registry::WorkflowRegistry;
 use crate::workflows::workflow::WorkflowId;
 use crate::{contexts::SessionContext, layers::layer::LayerCollectionListOptions};
 use actix_web::{web, FromRequest, HttpResponse, Responder};
+use geoengine_datatypes::dataset::DataProviderId;
 use geoengine_datatypes::primitives::{BandSelection, QueryRectangle};
 use geoengine_operators::engine::WorkflowOperatorPath;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::IntoParams;
-
-use super::tasks::TaskResponse;
 
 pub const ROOT_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x1c3b_8042_300b_485c_95b5_0147_d9dc_068d);
@@ -108,6 +109,16 @@ where
                     )
                     .route("", web::put().to(update_collection::<C>))
                     .route("", web::delete().to(remove_collection::<C>)),
+            )
+            .service(
+                web::scope("/providers")
+                    .route("", web::post().to(add_provider::<C>))
+                    .service(
+                        web::resource("/{provider}")
+                            .route(web::get().to(get_provider_definition::<C>))
+                            .route(web::patch().to(update_provider_definition::<C>))
+                            .route(web::delete().to(delete_provider::<C>)),
+                    ),
             ),
     );
 }
@@ -1172,6 +1183,140 @@ async fn remove_collection_from_collection<C: ApplicationContext>(
         .session_context(session)
         .db()
         .remove_layer_collection_from_parent(&path.sub_collection, &path.collection)
+        .await?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+/// Add a new provider
+#[utoipa::path(
+    tag = "Layers",
+    post,
+    path = "/layerDb/providers",
+    params(),
+    request_body = TypedDataProviderDefinition,
+    responses(
+        (status = 200, response = IdResponse::<DataProviderId>)
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+async fn add_provider<C: ApplicationContext>(
+    session: C::Session,
+    app_ctx: web::Data<C>,
+    request: web::Json<TypedDataProviderDefinition>,
+) -> Result<web::Json<IdResponse<DataProviderId>>> {
+    // Note: We ignore Pro Layer Providers since Pro will be removed
+    let provider = request.into_inner();
+
+    let id = app_ctx
+        .into_inner()
+        .session_context(session)
+        .db()
+        .add_layer_provider(provider)
+        .await?;
+
+    Ok(web::Json(IdResponse { id }))
+}
+
+/// Get an existing provider's definition
+#[utoipa::path(
+    tag = "Layers",
+    get,
+    path = "/layerDb/providers/{provider}",
+    params(
+        ("provider" = uuid::Uuid, description = "Layer provider id"),
+    ),
+    responses(
+        (status = 200, description = "OK")
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+async fn get_provider_definition<C: ApplicationContext>(
+    session: C::Session,
+    app_ctx: web::Data<C>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<web::Json<TypedDataProviderDefinition>> {
+    // Note: We ignore Pro Layer Providers since Pro will be removed
+    let id = DataProviderId(path.into_inner());
+
+    let provider = app_ctx
+        .into_inner()
+        .session_context(session)
+        .db()
+        .get_layer_provider_definition(id)
+        .await?;
+
+    Ok(web::Json(provider))
+}
+
+/// Update an existing provider's definition
+#[utoipa::path(
+    tag = "Layers",
+    patch,
+    path = "/layerDb/providers/{provider}",
+    params(
+        ("provider" = uuid::Uuid, description = "Layer provider id"),
+    ),
+    request_body = TypedDataProviderDefinition,
+    responses(
+        (status = 200, description = "OK")
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+async fn update_provider_definition<C: ApplicationContext>(
+    session: C::Session,
+    app_ctx: web::Data<C>,
+    path: web::Path<uuid::Uuid>,
+    request: web::Json<TypedDataProviderDefinition>,
+) -> Result<HttpResponse> {
+    // Note: We ignore Pro Layer Providers since Pro will be removed
+    let id = DataProviderId(path.into_inner());
+    let definition = request.into_inner();
+
+    app_ctx
+        .into_inner()
+        .session_context(session)
+        .db()
+        .update_layer_provider_definition(id, definition)
+        .await?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+/// Delete an existing provider
+#[utoipa::path(
+    tag = "Layers",
+    delete,
+    path = "/layerDb/providers/{provider}",
+    params(
+        ("provider" = uuid::Uuid, description = "Layer provider id"),
+    ),
+    responses(
+        (status = 200, description = "OK")
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+async fn delete_provider<C: ApplicationContext>(
+    session: C::Session,
+    app_ctx: web::Data<C>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse> {
+    // Note: We ignore Pro Layer Providers since Pro will be removed
+    let id = DataProviderId(path.into_inner());
+
+    app_ctx
+        .into_inner()
+        .session_context(session)
+        .db()
+        .delete_layer_provider(id)
         .await?;
 
     Ok(HttpResponse::Ok().finish())

@@ -1,6 +1,5 @@
 use super::migrations::{pro_migrations, ProMigrationImpl};
 use super::{ExecutionContextImpl, ProApplicationContext, ProGeoEngineDb, QuotaCheckerImpl};
-use crate::api::cli::add_providers_from_directory;
 use crate::api::model::services::Volume;
 use crate::contexts::{
     initialize_database, ApplicationContext, CurrentSchemaMigration, MigrationResult,
@@ -15,7 +14,7 @@ use crate::machine_learning::name::MlModelName;
 use crate::pro::api::cli::add_datasets_from_directory;
 use crate::pro::layers::add_from_directory::{
     add_layer_collections_from_directory, add_layers_from_directory,
-    add_pro_providers_from_directory,
+    add_pro_providers_from_directory, add_providers_from_directory,
 };
 use crate::pro::quota::{initialize_quota_tracking, QuotaTrackingFactory};
 use crate::pro::tasks::{ProTaskManager, ProTaskManagerBackend};

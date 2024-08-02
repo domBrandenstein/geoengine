@@ -1,4 +1,7 @@
 use super::ProLayerProviderDb;
+use crate::layers::external::TypedDataProviderDefinition;
+use crate::layers::storage::LayerProviderDb;
+use crate::pro::permissions::ResourceId::ProDataProvider;
 use crate::{error::Result, layers::listing::LayerCollectionId};
 use crate::{layers::storage::LayerDb, pro::datasets::TypedProDataProviderDefinition};
 use crate::{
@@ -199,18 +202,35 @@ pub async fn add_layer_collections_from_directory<
     }
 }
 
-pub async fn add_pro_providers_from_directory<D: ProLayerProviderDb>(
+pub async fn add_pro_providers_from_directory<D: ProLayerProviderDb + PermissionDb>(
     db: &mut D,
     base_path: PathBuf,
 ) {
-    async fn add_provider_definition_from_dir_entry<D: ProLayerProviderDb>(
+    async fn add_provider_definition_from_dir_entry<D: ProLayerProviderDb + PermissionDb>(
         db: &mut D,
         entry: &DirEntry,
     ) -> Result<()> {
         let def: TypedProDataProviderDefinition =
             serde_json::from_reader(BufReader::new(File::open(entry.path())?))?;
 
-        db.add_pro_layer_provider(def).await?; // TODO: add as system user
+        let id = db.add_pro_layer_provider(def).await?;
+
+        db.add_permission(
+            Role::registered_user_role_id(),
+            ProDataProvider(id),
+            Permission::Read,
+        )
+        .await
+        .boxed_context(crate::error::PermissionDb)?;
+
+        db.add_permission(
+            Role::anonymous_role_id(),
+            ProDataProvider(id),
+            Permission::Read,
+        )
+        .await
+        .boxed_context(crate::error::PermissionDb)?;
+
         Ok(())
     }
 
@@ -245,6 +265,61 @@ pub async fn add_pro_providers_from_directory<D: ProLayerProviderDb>(
             _ => {
                 // ignore directories, etc.
             }
+        }
+    }
+}
+
+// TODO: move to layers source dir
+pub async fn add_providers_from_directory<D: LayerProviderDb + PermissionDb>(
+    db: &mut D,
+    base_path: PathBuf,
+) {
+    async fn add_provider_definition_from_dir_entry<D: LayerProviderDb + PermissionDb>(
+        db: &mut D,
+        entry: &DirEntry,
+    ) -> Result<()> {
+        let def: TypedDataProviderDefinition =
+            serde_json::from_reader(BufReader::new(File::open(entry.path())?))?;
+
+        let id = db.add_layer_provider(def).await?;
+
+        db.add_permission(Role::registered_user_role_id(), id, Permission::Read)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        db.add_permission(Role::anonymous_role_id(), id, Permission::Read)
+            .await
+            .boxed_context(crate::error::PermissionDb)?;
+
+        Ok(())
+    }
+
+    let Ok(dir) = fs::read_dir(&base_path) else {
+        error!(
+            "Skipped adding providers from directory `{:?}` because it can't be read",
+            base_path
+        );
+        return;
+    };
+
+    for entry in dir {
+        match entry {
+            Ok(entry) if entry.path().is_file() => {
+                match add_provider_definition_from_dir_entry(db, &entry).await {
+                    Ok(()) => info!("Added provider from file `{:?}`", entry.path()),
+                    Err(e) => {
+                        warn!(
+                            "Skipped adding provider from file `{:?}` error: `{}`",
+                            entry.path(),
+                            e.to_string()
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Skipped adding provider from directory entry `{:?}`", e);
+            }
+            _ => {}
         }
     }
 }

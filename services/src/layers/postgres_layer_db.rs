@@ -3,6 +3,7 @@ use super::layer::{UpdateLayer, UpdateLayerCollection};
 use super::listing::{ProviderCapabilities, SearchType};
 use crate::contexts::PostgresDb;
 use crate::error;
+use crate::error::Error::NotImplemented;
 use crate::layers::layer::Property;
 use crate::layers::listing::{SearchCapabilities, SearchParameters, SearchTypes};
 use crate::workflows::workflow::WorkflowId;
@@ -1044,14 +1045,27 @@ where
     }
 
     async fn load_layer_provider(&self, id: DataProviderId) -> Result<Box<dyn DataProvider>> {
+        let definition = self.get_layer_provider_definition(id).await?;
+
+        Box::new(definition)
+            .initialize(PostgresDb {
+                conn_pool: self.conn_pool.clone(),
+            })
+            .await
+    }
+
+    async fn get_layer_provider_definition(
+        &self,
+        id: DataProviderId,
+    ) -> Result<TypedDataProviderDefinition> {
         let conn = self.conn_pool.get().await?;
 
         let stmt = conn
             .prepare(
                 "
-               SELECT 
+               SELECT
                    definition
-               FROM 
+               FROM
                    layer_providers
                WHERE
                    id = $1",
@@ -1060,12 +1074,22 @@ where
 
         let row = conn.query_one(&stmt, &[&id]).await?;
 
-        let definition: TypedDataProviderDefinition = row.get(0);
+        Ok(row.get(0))
+    }
 
-        Box::new(definition)
-            .initialize(PostgresDb {
-                conn_pool: self.conn_pool.clone(),
-            })
-            .await
+    async fn update_layer_provider_definition(
+        &self,
+        _id: DataProviderId,
+        _provider: TypedDataProviderDefinition,
+    ) -> Result<()> {
+        Err(NotImplemented {
+            message: "Layer provider updates are only implemented in Pro".to_string(),
+        })
+    }
+
+    async fn delete_layer_provider(&self, _id: DataProviderId) -> Result<()> {
+        Err(NotImplemented {
+            message: "Layer provider deletions are only implemented in Pro".to_string(),
+        })
     }
 }

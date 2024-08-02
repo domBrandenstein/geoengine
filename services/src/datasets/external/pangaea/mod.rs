@@ -20,6 +20,7 @@ use geoengine_operators::source::{GdalLoadingInfo, OgrSourceDataset};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use utoipa::ToSchema;
 
 mod meta;
 
@@ -28,7 +29,7 @@ pub const PANGAEA_PROVIDER_ID: DataProviderId =
 
 /// The pangaea provider allows to include datasets from
 /// <http://pangaea.de/>
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PangaeaDataProviderDefinition {
     pub name: String,

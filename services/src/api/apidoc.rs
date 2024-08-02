@@ -38,10 +38,21 @@ use crate::api::model::services::{
 };
 use crate::api::ogc::{util::OgcBoundingBox, wcs, wfs, wms};
 use crate::contexts::{SessionId, SimpleSession};
+use crate::datasets::dataset_listing_provider::DatasetLayerListingCollection;
+use crate::datasets::dataset_listing_provider::DatasetLayerListingProviderDefinition;
+use crate::datasets::external::edr::EdrVectorSpec;
+use crate::datasets::external::{
+    aruna::ArunaDataProviderDefinition, edr::EdrDataProviderDefinition,
+    gbif::GbifDataProviderDefinition, gfbio_abcd::GfbioAbcdDataProviderDefinition,
+    gfbio_collections::GfbioCollectionsDataProviderDefinition,
+    netcdfcf::EbvPortalDataProviderDefinition, netcdfcf::NetCdfCfDataProviderDefinition,
+    pangaea::PangaeaDataProviderDefinition,
+};
 use crate::datasets::listing::{DatasetListing, OrderBy};
 use crate::datasets::storage::{AutoCreateDataset, Dataset, SuggestMetaData};
 use crate::datasets::upload::{UploadId, VolumeName};
 use crate::datasets::{DatasetName, RasterDatasetFromWorkflow, RasterDatasetFromWorkflowResult};
+use crate::layers::external::TypedDataProviderDefinition;
 use crate::layers::layer::{
     AddLayer, AddLayerCollection, CollectionItem, Layer, LayerCollection, LayerCollectionListing,
     LayerListing, Property, ProviderLayerCollectionId, ProviderLayerId,
@@ -56,6 +67,7 @@ use crate::projects::{
     RasterSymbology, STRectangle, StrokeParam, Symbology, TextSymbology, UpdateProject,
 };
 use crate::tasks::{TaskFilter, TaskId, TaskListOptions, TaskStatus, TaskStatusWithId};
+use crate::util::postgres::DatabaseConnectionConfig;
 use crate::util::{
     apidoc::{OpenApiServerInfo, TransformSchemasWithTag},
     server::ServerInfo,
@@ -84,6 +96,10 @@ use utoipa::{Modify, OpenApi};
         handlers::layers::add_existing_collection_to_collection,
         handlers::layers::remove_collection_from_collection,
         handlers::layers::layer_to_dataset,
+        handlers::layers::add_provider,
+        handlers::layers::get_provider_definition,
+        handlers::layers::update_provider_definition,
+        handlers::layers::delete_provider,
         handlers::session::anonymous_handler,
         handlers::session::session_handler,
         handlers::session::session_project_handler,
@@ -349,6 +365,20 @@ use utoipa::{Modify, OpenApi};
             ProjectVersion,
             RasterStreamWebsocketResultType,
             CacheTtlSeconds,
+
+            TypedDataProviderDefinition,
+            ArunaDataProviderDefinition,
+            DatasetLayerListingProviderDefinition,
+            GbifDataProviderDefinition,
+            GfbioAbcdDataProviderDefinition,
+            GfbioCollectionsDataProviderDefinition,
+            EbvPortalDataProviderDefinition,
+            NetCdfCfDataProviderDefinition,
+            PangaeaDataProviderDefinition,
+            EdrDataProviderDefinition,
+            DatabaseConnectionConfig,
+            EdrVectorSpec,
+            DatasetLayerListingCollection
         ),
     ),
     modifiers(&SecurityAddon, &ApiDocInfo, &OpenApiServerInfo, &TransformSchemasWithTag),

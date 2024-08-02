@@ -45,12 +45,13 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use url::Url;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub const GFBIO_COLLECTIONS_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0xf64e_2d5b_3b80_476a_83f5_c330_956b_2909);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GfbioCollectionsDataProviderDefinition {
     pub name: String,

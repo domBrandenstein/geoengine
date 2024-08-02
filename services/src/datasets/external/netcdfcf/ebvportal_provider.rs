@@ -34,12 +34,13 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use utoipa::ToSchema;
 
 /// Singleton Provider with id `77d0bf11-986e-43f5-b11d-898321f1854c`
 pub const EBV_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x77d0_bf11_986e_43f5_b11d_8983_21f1_854c);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EbvPortalDataProviderDefinition {
     pub name: String,
@@ -47,8 +48,10 @@ pub struct EbvPortalDataProviderDefinition {
     pub priority: Option<i16>,
     pub base_url: Url,
     /// Path were the `NetCDF` data can be found
+    #[schema(value_type = String)]
     pub data: PathBuf,
     /// Path were overview files are stored
+    #[schema(value_type = String)]
     pub overviews: PathBuf,
     #[serde(default)]
     pub cache_ttl: CacheTtlSeconds,

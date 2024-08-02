@@ -1,18 +1,5 @@
 use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
-use async_trait::async_trait;
-use geoengine_datatypes::{
-    dataset::{DataId, LayerId},
-    primitives::{RasterQueryRectangle, VectorQueryRectangle},
-};
-use geoengine_operators::{
-    engine::{MetaData, MetaDataProvider, RasterResultDescriptor, VectorResultDescriptor},
-    mock::MockDatasetDataSourceLoadingInfo,
-    source::{GdalLoadingInfo, OgrSourceDataset},
-};
-use postgres_types::{FromSql, ToSql};
-use serde::{Deserialize, Serialize};
-
 use crate::{
     contexts::GeoEngineDb,
     datasets::listing::DatasetProvider,
@@ -31,6 +18,19 @@ use crate::{
     util::operators::source_operator_from_dataset,
     workflows::workflow::Workflow,
 };
+use async_trait::async_trait;
+use geoengine_datatypes::{
+    dataset::{DataId, LayerId},
+    primitives::{RasterQueryRectangle, VectorQueryRectangle},
+};
+use geoengine_operators::{
+    engine::{MetaData, MetaDataProvider, RasterResultDescriptor, VectorResultDescriptor},
+    mock::MockDatasetDataSourceLoadingInfo,
+    source::{GdalLoadingInfo, OgrSourceDataset},
+};
+use postgres_types::{FromSql, ToSql};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use geoengine_datatypes::dataset::{DataProviderId, DatasetId};
 
@@ -40,7 +40,7 @@ const TAG_PREFIX: &str = "tags:";
 const TAG_WILDCARD: &str = "*";
 const ROOT_COLLECTION_ID: &str = "root";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasetLayerListingProviderDefinition {
     pub id: DataProviderId,
@@ -70,7 +70,7 @@ impl<D> std::fmt::Debug for DatasetLayerListingProvider<D> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 pub struct DatasetLayerListingCollection {
     pub name: String,
     pub description: String,
