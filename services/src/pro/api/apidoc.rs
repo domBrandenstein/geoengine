@@ -64,6 +64,7 @@ use crate::layers::layer::{
 use crate::layers::listing::{
     LayerCollectionId, ProviderCapabilities, SearchCapabilities, SearchType, SearchTypes,
 };
+use crate::layers::storage::LayerProviderListing;
 use crate::machine_learning::name::MlModelName;
 use crate::machine_learning::{MlModel, MlModelId, MlModelMetadata};
 use crate::pro;
@@ -115,6 +116,7 @@ use utoipa::{Modify, OpenApi};
         handlers::layers::get_provider_definition,
         handlers::layers::update_provider_definition,
         handlers::layers::delete_provider,
+        handlers::layers::list_providers,
         handlers::layers::update_layer,
         handlers::layers::update_collection,
         handlers::layers::remove_layer,
@@ -441,6 +443,8 @@ use utoipa::{Modify, OpenApi};
             EdrDataProviderDefinition,
             DatabaseConnectionConfig,
             EdrVectorSpec,
+            DatasetLayerListingCollection,
+            LayerProviderListing,
             DatasetLayerListingCollection
             MlModel,
             MlModelId,

@@ -60,6 +60,7 @@ use crate::layers::layer::{
 use crate::layers::listing::{
     LayerCollectionId, ProviderCapabilities, SearchCapabilities, SearchType, SearchTypes,
 };
+use crate::layers::storage::LayerProviderListing;
 use crate::projects::{
     ColorParam, CreateProject, DerivedColor, DerivedNumber, LayerUpdate, LayerVisibility,
     LineSymbology, NumberParam, Plot, PlotUpdate, PointSymbology, PolygonSymbology, Project,
@@ -100,6 +101,7 @@ use utoipa::{Modify, OpenApi};
         handlers::layers::get_provider_definition,
         handlers::layers::update_provider_definition,
         handlers::layers::delete_provider,
+        handlers::layers::list_providers,
         handlers::session::anonymous_handler,
         handlers::session::session_handler,
         handlers::session::session_project_handler,
@@ -378,7 +380,8 @@ use utoipa::{Modify, OpenApi};
             EdrDataProviderDefinition,
             DatabaseConnectionConfig,
             EdrVectorSpec,
-            DatasetLayerListingCollection
+            DatasetLayerListingCollection,
+            LayerProviderListing,
         ),
     ),
     modifiers(&SecurityAddon, &ApiDocInfo, &OpenApiServerInfo, &TransformSchemasWithTag),

@@ -13,7 +13,9 @@ use crate::layers::layer::{
 use crate::layers::listing::{
     LayerCollectionId, LayerCollectionProvider, ProviderCapabilities, SearchParameters,
 };
-use crate::layers::storage::{LayerDb, LayerProviderDb, LayerProviderListingOptions};
+use crate::layers::storage::{
+    LayerDb, LayerProviderDb, LayerProviderListing, LayerProviderListingOptions,
+};
 use crate::util::config::get_config_element;
 use crate::util::extractors::{ValidatedJson, ValidatedQuery};
 use crate::workflows::registry::WorkflowRegistry;
@@ -113,6 +115,7 @@ where
             .service(
                 web::scope("/providers")
                     .route("", web::post().to(add_provider::<C>))
+                    .route("", web::get().to(list_providers::<C>))
                     .service(
                         web::resource("/{provider}")
                             .route(web::get().to(get_provider_definition::<C>))
@@ -1218,6 +1221,34 @@ async fn add_provider<C: ApplicationContext>(
         .await?;
 
     Ok(web::Json(IdResponse { id }))
+}
+
+/// List all providers
+#[utoipa::path(
+    tag = "Layers",
+    get,
+    path = "/layerDb/providers",
+    params(LayerProviderListingOptions),
+    responses(
+        (status = 200, description = "OK", body = Vec<LayerProviderListing>)
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+async fn list_providers<C: ApplicationContext>(
+    session: C::Session,
+    app_ctx: web::Data<C>,
+    options: ValidatedQuery<LayerProviderListingOptions>,
+) -> Result<web::Json<Vec<LayerProviderListing>>> {
+    let providers = app_ctx
+        .into_inner()
+        .session_context(session)
+        .db()
+        .list_layer_providers(options.into_inner())
+        .await?;
+
+    Ok(web::Json(providers))
 }
 
 /// Get an existing provider's definition
