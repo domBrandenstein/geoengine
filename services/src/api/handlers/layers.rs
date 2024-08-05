@@ -1229,7 +1229,7 @@ async fn add_provider<C: ApplicationContext>(
         ("provider" = uuid::Uuid, description = "Layer provider id"),
     ),
     responses(
-        (status = 200, description = "OK")
+        (status = 200, description = "OK", body = TypedDataProviderDefinition)
     ),
     security(
         ("session_token" = [])
