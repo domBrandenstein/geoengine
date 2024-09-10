@@ -1,4 +1,4 @@
-use crate::api::model::datatypes::{DatasetId, LayerId};
+use crate::api::model::datatypes::{DataProviderId, DatasetId, LayerId};
 use crate::contexts::{ApplicationContext, SessionContext};
 use crate::error::Result;
 use crate::layers::listing::LayerCollectionId;
@@ -52,6 +52,7 @@ pub enum Resource {
     Project(ProjectId),
     #[schema(title = "DatasetResource")]
     Dataset(DatasetId),
+    Provider(DataProviderId),
 }
 
 impl From<Resource> for ResourceId {
@@ -63,6 +64,7 @@ impl From<Resource> for ResourceId {
             }
             Resource::Project(project_id) => ResourceId::Project(project_id),
             Resource::Dataset(dataset_id) => ResourceId::DatasetId(dataset_id.into()),
+            Resource::Provider(provider_id) => ResourceId::DataProvider(provider_id.into()),
         }
     }
 }

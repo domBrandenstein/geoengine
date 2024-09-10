@@ -971,7 +971,7 @@ where
         let mut conn = self.conn_pool.get().await?;
         let tx = conn.build_transaction().start().await?;
 
-        self.ensure_permission_in_tx(id.into(), Permission::Read, &tx)
+        self.ensure_permission_in_tx(id.into(), Permission::Owner, &tx)
             .await
             .boxed_context(crate::error::PermissionDb)?;
 

@@ -38,7 +38,7 @@ use geoengine_operators::source::{
     OgrSourceErrorSpec, OgrSourceParameters, OgrSourceTimeFormat,
 };
 use postgres_types::{FromSql, ToSql};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use snafu::ensure;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
@@ -81,10 +81,18 @@ pub struct ArunaDataProviderDefinition {
     pub priority: Option<i16>,
     pub api_url: String,
     pub project_id: String,
+    #[serde(serialize_with = "secret")]
     pub api_token: String,
     pub filter_label: String,
     #[serde(default)]
     pub cache_ttl: CacheTtlSeconds,
+}
+
+fn secret<S>(_input: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str("*****")
 }
 
 #[async_trait::async_trait]
