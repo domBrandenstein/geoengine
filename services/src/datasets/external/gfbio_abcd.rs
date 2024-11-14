@@ -2,7 +2,7 @@ use crate::contexts::GeoEngineDb;
 use crate::datasets::listing::{Provenance, ProvenanceOutput};
 use crate::error::Result;
 use crate::error::{self, Error};
-use crate::layers::external::{DataProvider, DataProviderDefinition};
+use crate::layers::external::{DataProvider, DataProviderDefinition, TypedDataProviderDefinition};
 use crate::layers::layer::{
     CollectionItem, Layer, LayerCollection, LayerCollectionListOptions, LayerListing,
     ProviderLayerCollectionId, ProviderLayerId,
@@ -37,7 +37,7 @@ use geoengine_operators::{
     source::{GdalLoadingInfo, OgrSourceDataset},
 };
 use postgres_types::{FromSql, ToSql};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use snafu::ensure;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -46,15 +46,27 @@ use utoipa::ToSchema;
 pub const GFBIO_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0x907f_9f5b_0304_4a0e_a5ef_28de_62d1_c0f9);
 
+const SECRET_REPLACEMENT: &str = "*****";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GfbioAbcdDataProviderDefinition {
     pub name: String,
     pub description: String,
     pub priority: Option<i16>,
+    #[serde(serialize_with = "secret")]
     pub db_config: DatabaseConnectionConfig,
     #[serde(default)]
     pub cache_ttl: CacheTtlSeconds,
+}
+
+fn secret<S>(input: &DatabaseConnectionConfig, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut redacted_db_config = input.clone();
+    redacted_db_config.password = SECRET_REPLACEMENT.to_string();
+    serializer.serialize_some(&redacted_db_config)
 }
 
 #[async_trait]
@@ -80,6 +92,21 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for GfbioAbcdDataProviderDefiniti
 
     fn priority(&self) -> i16 {
         self.priority.unwrap_or(0)
+    }
+
+    fn update(&self, new: TypedDataProviderDefinition) -> TypedDataProviderDefinition
+    where
+        Self: Sized,
+    {
+        match new {
+            TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(mut new) => {
+                if new.db_config.password == SECRET_REPLACEMENT {
+                    new.db_config.password = self.db_config.password.clone();
+                }
+                TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(new)
+            }
+            _ => new,
+        }
     }
 }
 

@@ -7,7 +7,7 @@ use crate::datasets::external::netcdfcf::NetCdfCf4DProviderError;
 use crate::{layers::listing::LayerCollectionId, workflows::workflow::WorkflowId};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
-use geoengine_datatypes::dataset::LayerId;
+use geoengine_datatypes::dataset::{DataProviderId, LayerId};
 use geoengine_datatypes::error::ErrorSource;
 use geoengine_datatypes::util::helpers::ge_report;
 use ordered_float::FloatIsNan;
@@ -512,6 +512,17 @@ pub enum Error {
     CannotAccessVolumePath {
         volume_name: String,
     },
+
+    #[snafu(display("A provider with id '{}' already exists", provider_id))]
+    ProviderIdAlreadyExists {
+        provider_id: DataProviderId,
+    },
+
+    #[snafu(display("An existing provider's type cannot be modified"))]
+    ProviderTypeUnmodifiable,
+
+    #[snafu(display("An existing provider's id cannot be modified"))]
+    ProviderIdUnmodifiable,
 }
 
 impl actix_web::error::ResponseError for Error {

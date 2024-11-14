@@ -4,7 +4,7 @@ use crate::contexts::GeoEngineDb;
 use crate::datasets::listing::ProvenanceOutput;
 use crate::error::Error::ProviderDoesNotSupportBrowsing;
 use crate::error::{Error, Result};
-use crate::layers::external::{DataProvider, DataProviderDefinition};
+use crate::layers::external::{DataProvider, DataProviderDefinition, TypedDataProviderDefinition};
 use crate::layers::layer::{
     CollectionItem, Layer, LayerCollection, LayerCollectionListOptions, LayerListing,
     ProviderLayerCollectionId, ProviderLayerId,
@@ -39,7 +39,7 @@ use geoengine_operators::{
     source::{GdalLoadingInfo, OgrSourceDataset},
 };
 use reqwest::{header, Client};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
@@ -51,6 +51,8 @@ use uuid::Uuid;
 pub const GFBIO_COLLECTIONS_PROVIDER_ID: DataProviderId =
     DataProviderId::from_u128(0xf64e_2d5b_3b80_476a_83f5_c330_956b_2909);
 
+const SECRET_REPLACEMENT: &str = "*****";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GfbioCollectionsDataProviderDefinition {
@@ -58,11 +60,29 @@ pub struct GfbioCollectionsDataProviderDefinition {
     pub description: String,
     pub priority: Option<i16>,
     pub collection_api_url: Url,
+    #[serde(serialize_with = "secret_token")]
     pub collection_api_auth_token: String,
+    #[serde(serialize_with = "secret_db_config")]
     pub abcd_db_config: DatabaseConnectionConfig,
     pub pangaea_url: Url,
     #[serde(default)]
     pub cache_ttl: CacheTtlSeconds,
+}
+
+fn secret_token<S>(_input: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(SECRET_REPLACEMENT)
+}
+
+fn secret_db_config<S>(input: &DatabaseConnectionConfig, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut redacted_db_config = input.clone();
+    redacted_db_config.password = SECRET_REPLACEMENT.to_string();
+    serializer.serialize_some(&redacted_db_config)
 }
 
 #[async_trait]
@@ -96,6 +116,24 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for GfbioCollectionsDataProviderD
 
     fn priority(&self) -> i16 {
         self.priority.unwrap_or(0)
+    }
+
+    fn update(&self, new: TypedDataProviderDefinition) -> TypedDataProviderDefinition
+    where
+        Self: Sized,
+    {
+        match new {
+            TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(mut new) => {
+                if new.abcd_db_config.password == SECRET_REPLACEMENT {
+                    new.abcd_db_config.password = self.abcd_db_config.password.clone();
+                }
+                if new.collection_api_auth_token == SECRET_REPLACEMENT {
+                    new.collection_api_auth_token = self.collection_api_auth_token.clone();
+                }
+                TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(new)
+            }
+            _ => new,
+        }
     }
 }
 

@@ -50,7 +50,7 @@ use utoipa::ToSchema;
 use crate::contexts::GeoEngineDb;
 use crate::datasets::external::aruna::metadata::{DataType, GEMetadata, RasterInfo, VectorInfo};
 use crate::datasets::listing::ProvenanceOutput;
-use crate::layers::external::{DataProvider, DataProviderDefinition};
+use crate::layers::external::{DataProvider, DataProviderDefinition, TypedDataProviderDefinition};
 use crate::layers::layer::{
     CollectionItem, Layer, LayerCollection, LayerCollectionListOptions, LayerListing,
     ProviderLayerCollectionId, ProviderLayerId,
@@ -71,6 +71,7 @@ mod mock_grpc_server;
 type Result<T, E = ArunaProviderError> = std::result::Result<T, E>;
 
 const URL_REPLACEMENT: &str = "%URL%";
+const SECRET_REPLACEMENT: &str = "*****";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, FromSql, ToSql, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -92,7 +93,7 @@ fn secret<S>(_input: &String, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str("*****")
+    serializer.serialize_str(SECRET_REPLACEMENT)
 }
 
 #[async_trait::async_trait]
@@ -115,6 +116,21 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for ArunaDataProviderDefinition {
 
     fn priority(&self) -> i16 {
         self.priority.unwrap_or(0)
+    }
+
+    fn update(&self, new: TypedDataProviderDefinition) -> TypedDataProviderDefinition
+    where
+        Self: Sized,
+    {
+        match new {
+            TypedDataProviderDefinition::ArunaDataProviderDefinition(mut new) => {
+                if new.api_token == SECRET_REPLACEMENT {
+                    new.api_token = self.api_token.clone();
+                }
+                TypedDataProviderDefinition::ArunaDataProviderDefinition(new)
+            }
+            _ => new,
+        }
     }
 }
 

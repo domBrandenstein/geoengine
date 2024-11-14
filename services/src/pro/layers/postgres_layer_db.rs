@@ -1,3 +1,6 @@
+use crate::error::Error::{
+    ProviderIdAlreadyExists, ProviderIdUnmodifiable, ProviderTypeUnmodifiable,
+};
 use crate::layers::external::TypedDataProviderDefinition;
 use crate::layers::layer::{Property, UpdateLayer, UpdateLayerCollection};
 use crate::layers::listing::{
@@ -39,6 +42,7 @@ use geoengine_datatypes::error::BoxedResultExt;
 use geoengine_datatypes::util::HashMapTextTextDbType;
 use snafu::ResultExt;
 use std::str::FromStr;
+use tokio_postgres::Transaction;
 use uuid::Uuid;
 
 #[async_trait]
@@ -769,6 +773,12 @@ where
         let mut conn = self.conn_pool.get().await?;
         let tx = conn.build_transaction().start().await?;
 
+        let id = DataProviderDefinition::<Self>::id(&provider);
+
+        if Self::id_exists(&tx, &id).await? {
+            return Err(ProviderIdAlreadyExists { provider_id: id });
+        }
+
         let prio = DataProviderDefinition::<Self>::priority(&provider);
 
         let clamp_prio = Self::clamp_prio(&provider, prio);
@@ -787,7 +797,6 @@ where
             )
             .await?;
 
-        let id = DataProviderDefinition::<Self>::id(&provider);
         tx.execute(
             &stmt,
             &[
@@ -968,12 +977,33 @@ where
         id: DataProviderId,
         provider: TypedDataProviderDefinition,
     ) -> Result<()> {
+        if id.0 != DataProviderDefinition::<Self>::id(&provider).0 {
+            return Err(ProviderIdUnmodifiable);
+        }
+
         let mut conn = self.conn_pool.get().await?;
         let tx = conn.build_transaction().start().await?;
 
         self.ensure_permission_in_tx(id.into(), Permission::Owner, &tx)
             .await
             .boxed_context(crate::error::PermissionDb)?;
+
+        let type_name_matches: bool = tx
+            .query_one(
+                "SELECT type_name = $2 FROM layer_providers WHERE id = $1",
+                &[&id, &DataProviderDefinition::<Self>::type_name(&provider)],
+            )
+            .await?
+            .get(0);
+
+        if !type_name_matches {
+            return Err(ProviderTypeUnmodifiable);
+        }
+
+        let old_definition = self.get_layer_provider_definition(id).await?;
+        let provider = DataProviderDefinition::<Self>::update(&old_definition, provider);
+
+        println!("{:?}", provider);
 
         let prio = DataProviderDefinition::<Self>::priority(&provider);
 
@@ -984,10 +1014,9 @@ where
                 "
               UPDATE layer_providers
               SET
-                type_name = $2,
-                name = $3,
-                definition = $4,
-                priority = $5
+                name = $2,
+                definition = $3,
+                priority = $4
               WHERE id = $1
               ",
             )
@@ -997,7 +1026,6 @@ where
             &stmt,
             &[
                 &id,
-                &DataProviderDefinition::<Self>::type_name(&provider),
                 &DataProviderDefinition::<Self>::name(&provider),
                 &provider,
                 &clamp_prio,
@@ -1054,6 +1082,16 @@ where
             );
         }
         clamp_prio
+    }
+
+    async fn id_exists(tx: &Transaction<'_>, id: &DataProviderId) -> Result<bool> {
+        Ok(tx
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM layer_providers WHERE id = $1)",
+                &[&id],
+            )
+            .await?
+            .get::<usize, bool>(0))
     }
 }
 
