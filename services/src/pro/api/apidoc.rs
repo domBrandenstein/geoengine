@@ -445,7 +445,7 @@ use utoipa::{Modify, OpenApi};
             EdrVectorSpec,
             DatasetLayerListingCollection,
             LayerProviderListing,
-            DatasetLayerListingCollection
+            DatasetLayerListingCollection,
             MlModel,
             MlModelId,
             MlModelName,
