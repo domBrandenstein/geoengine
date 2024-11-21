@@ -837,7 +837,7 @@ where
         let stmt = conn
             .prepare(
                 "(
-                    SELECT 
+                    SELECT DISTINCT
                         id, 
                         name,
                         type_name,
@@ -849,7 +849,7 @@ where
                         up.user_id = $3
                         AND priority > -1000
                     UNION ALL
-                    SELECT 
+                    SELECT DISTINCT
                         id, 
                         name,
                         type_name,

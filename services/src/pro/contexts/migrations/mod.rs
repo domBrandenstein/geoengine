@@ -1,3 +1,4 @@
+use crate::contexts::migrations::migration_0015_provider_permissions::Migration0015ProviderPermissions;
 use crate::contexts::{
     Migration, Migration0000Initial, Migration0001RasterStacks,
     Migration0002DatasetListingProvider, Migration0003GbifConfig,
@@ -19,6 +20,7 @@ mod migration_0010_s2_stack_time_buffers;
 mod migration_0011_remove_xgb;
 mod migration_0012_ml_model_db;
 mod migration_0013_copernicus_provider;
+mod migration_0015_provider_permissions;
 
 /// Get all regular and pro migrations. This function wraps all regular migrations into a pro migration.
 pub fn pro_migrations() -> Vec<Box<dyn Migration>>
@@ -44,6 +46,7 @@ where
         Box::new(ProMigrationImpl::from(Migration0012MlModelDb)),
         Box::new(ProMigrationImpl::from(Migration0013CopernicusProvider)),
         Box::new(NoProMigrationImpl::from(Migration0014MultibandColorizer)),
+        Box::new(ProMigrationImpl::from(Migration0015ProviderPermissions)),
     ]
 }
 
