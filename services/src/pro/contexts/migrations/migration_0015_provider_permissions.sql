@@ -1,6 +1,9 @@
 ALTER TABLE permissions
-ADD COLUMN provider_id uuid REFERENCES layer_providers (id) ON DELETE CASCADE,
-ADD COLUMN pro_provider_id uuid REFERENCES pro_layer_providers (id) ON DELETE CASCADE;
+ADD COLUMN provider_id uuid
+REFERENCES layer_providers (id) ON DELETE CASCADE,
+ADD COLUMN pro_provider_id uuid
+REFERENCES pro_layer_providers (id)
+ON DELETE CASCADE;
 
 ALTER TABLE permissions
 DROP CONSTRAINT permissions_check;
@@ -13,8 +16,8 @@ ADD CONSTRAINT permissions_check CHECK (
         + (layer_collection_id IS NOT NULL)::integer
         + (project_id IS NOT NULL)::integer
         + (ml_model_id IS NOT NULL)::integer
-        + (provider_id IS NOT NULL):: integer
-        + (pro_provider_id IS NOT NULL):: integer
+        + (provider_id IS NOT NULL)::integer
+        + (pro_provider_id IS NOT NULL)::integer
     ) = 1
 );
 

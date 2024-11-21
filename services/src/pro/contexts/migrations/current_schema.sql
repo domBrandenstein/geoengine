@@ -168,8 +168,8 @@ CREATE TABLE permissions (
             + (layer_collection_id IS NOT NULL)::integer
             + (project_id IS NOT NULL)::integer
             + (ml_model_id IS NOT NULL)::integer
-            + (provider_id IS NOT NULL):: integer
-            + (pro_provider_id IS NOT NULL):: integer
+            + (provider_id IS NOT NULL)::integer
+            + (pro_provider_id IS NOT NULL)::integer
         ) = 1
     )
 );
