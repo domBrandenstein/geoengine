@@ -101,7 +101,7 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for GfbioAbcdDataProviderDefiniti
         match new {
             TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(mut new) => {
                 if new.db_config.password == SECRET_REPLACEMENT {
-                    new.db_config.password = self.db_config.password.clone();
+                    new.db_config.password.clone_from(&self.db_config.password);
                 }
                 TypedDataProviderDefinition::GfbioAbcdDataProviderDefinition(new)
             }

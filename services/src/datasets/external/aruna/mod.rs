@@ -89,7 +89,7 @@ pub struct ArunaDataProviderDefinition {
     pub cache_ttl: CacheTtlSeconds,
 }
 
-fn secret<S>(_input: &String, serializer: S) -> Result<S::Ok, S::Error>
+fn secret<S>(_input: &str, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -125,7 +125,7 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for ArunaDataProviderDefinition {
         match new {
             TypedDataProviderDefinition::ArunaDataProviderDefinition(mut new) => {
                 if new.api_token == SECRET_REPLACEMENT {
-                    new.api_token = self.api_token.clone();
+                    new.api_token.clone_from(&self.api_token);
                 }
                 TypedDataProviderDefinition::ArunaDataProviderDefinition(new)
             }

@@ -252,7 +252,7 @@ async fn get_layer_providers<C: ApplicationContext>(
     }
     let root_collection = LayerCollection {
         id: ProviderLayerCollectionId {
-            provider_id: ROOT_PROVIDER_ID.into(),
+            provider_id: ROOT_PROVIDER_ID,
             collection_id: LayerCollectionId(ROOT_COLLECTION_ID.to_string()),
         },
         name: "Layer Providers".to_string(),
@@ -327,7 +327,7 @@ async fn list_collection_handler<C: ApplicationContext>(
 
     let db = app_ctx.session_context(session).db();
 
-    if provider == crate::layers::storage::INTERNAL_PROVIDER_ID.into() {
+    if provider == crate::layers::storage::INTERNAL_PROVIDER_ID {
         let collection = db
             .load_layer_collection(&item, options.into_inner())
             .await?;
@@ -336,7 +336,7 @@ async fn list_collection_handler<C: ApplicationContext>(
     }
 
     let collection = db
-        .load_layer_provider(provider.into())
+        .load_layer_provider(provider)
         .await?
         .load_layer_collection(&item, options.into_inner())
         .await?;
@@ -386,7 +386,7 @@ async fn provider_capabilities_handler<C: ApplicationContext>(
 
     let db = app_ctx.session_context(session).db();
 
-    let capabilities = match provider.into() {
+    let capabilities = match provider {
         crate::layers::storage::INTERNAL_PROVIDER_ID => LayerCollectionProvider::capabilities(&db),
         provider => db.load_layer_provider(provider).await?.capabilities(),
     };
@@ -460,7 +460,7 @@ async fn search_handler<C: ApplicationContext>(
 
     let db = app_ctx.session_context(session).db();
 
-    let collection = match provider.into() {
+    let collection = match provider {
         crate::layers::storage::INTERNAL_PROVIDER_ID => {
             LayerCollectionProvider::search(&db, &collection, options.into_inner()).await?
         }
@@ -510,7 +510,7 @@ async fn autocomplete_handler<C: ApplicationContext>(
 
     let db = app_ctx.session_context(session).db();
 
-    let suggestions = match provider.into() {
+    let suggestions = match provider {
         crate::layers::storage::INTERNAL_PROVIDER_ID => {
             LayerCollectionProvider::autocomplete_search(&db, &collection, options.into_inner())
                 .await?
@@ -697,14 +697,14 @@ async fn layer_handler<C: ApplicationContext>(
 
     let db = app_ctx.session_context(session).db();
 
-    if provider == crate::layers::storage::INTERNAL_PROVIDER_ID.into() {
+    if provider == crate::layers::storage::INTERNAL_PROVIDER_ID {
         let collection = db.load_layer(&item.into()).await?;
 
         return Ok(web::Json(collection));
     }
 
     let collection = db
-        .load_layer_provider(provider.into())
+        .load_layer_provider(provider)
         .await?
         .load_layer(&item.into())
         .await?;
@@ -736,10 +736,10 @@ async fn layer_to_workflow_id_handler<C: ApplicationContext>(
     let (provider, item) = path.into_inner();
 
     let db = app_ctx.session_context(session.clone()).db();
-    let layer = match provider.into() {
+    let layer = match provider {
         crate::layers::storage::INTERNAL_PROVIDER_ID => db.load_layer(&item.into()).await?,
         _ => {
-            db.load_layer_provider(provider.into())
+            db.load_layer_provider(provider)
                 .await?
                 .load_layer(&item.into())
                 .await?
@@ -784,10 +784,10 @@ async fn layer_to_dataset<C: ApplicationContext>(
 
     let db = ctx.db();
 
-    let layer = match provider.into() {
+    let layer = match provider {
         crate::layers::storage::INTERNAL_PROVIDER_ID => db.load_layer(&item).await?,
         _ => {
-            db.load_layer_provider(provider.into())
+            db.load_layer_provider(provider)
                 .await?
                 .load_layer(&item)
                 .await?

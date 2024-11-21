@@ -69,7 +69,7 @@ pub struct GfbioCollectionsDataProviderDefinition {
     pub cache_ttl: CacheTtlSeconds,
 }
 
-fn secret_token<S>(_input: &String, serializer: S) -> Result<S::Ok, S::Error>
+fn secret_token<S>(_input: &str, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -125,10 +125,13 @@ impl<D: GeoEngineDb> DataProviderDefinition<D> for GfbioCollectionsDataProviderD
         match new {
             TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(mut new) => {
                 if new.abcd_db_config.password == SECRET_REPLACEMENT {
-                    new.abcd_db_config.password = self.abcd_db_config.password.clone();
+                    new.abcd_db_config
+                        .password
+                        .clone_from(&self.abcd_db_config.password);
                 }
                 if new.collection_api_auth_token == SECRET_REPLACEMENT {
-                    new.collection_api_auth_token = self.collection_api_auth_token.clone();
+                    new.collection_api_auth_token
+                        .clone_from(&self.collection_api_auth_token);
                 }
                 TypedDataProviderDefinition::GfbioCollectionsDataProviderDefinition(new)
             }
